@@ -48,7 +48,6 @@ import {
   ImageIcon,
   GripVertical,
   LogOut,
-  Settings,
   ExternalLink,
   LayoutGrid,
   ListFilter,
@@ -231,7 +230,11 @@ const saveLogoOrder = async (logoIds: string[]) => {
 }
 
 // Project Card Component
-function ProjectCard({ project, onEdit, onDelete }: { project: Project; onEdit: () => void; onDelete: () => void }) {
+function ProjectCard({
+  project,
+  onEdit,
+  onDelete,
+}: { project: Project; onEdit: (project: Project) => void; onDelete: () => void }) {
   return (
     <motion.div
       className="bg-white dark:bg-card rounded-xl shadow-sm border overflow-hidden transition-all hover:shadow-md"
@@ -383,7 +386,7 @@ function ProjectCard({ project, onEdit, onDelete }: { project: Project; onEdit: 
             </DialogContent>
           </Dialog>
           <div className="flex gap-1">
-            <Button variant="ghost" size="icon" onClick={onEdit}>
+            <Button variant="ghost" size="icon" onClick={() => onEdit(project)}>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="16"
@@ -725,6 +728,7 @@ export function AdminPanel() {
       )
     } catch (error: any) {
       showNotification("error", `Upload failed: ${error.message}`)
+      console.error("Upload error details:", error)
     } finally {
       setIsUploading(false)
       // Reset file input
@@ -815,7 +819,7 @@ export function AdminPanel() {
     } else {
       setNewProject({
         ...newProject,
-        images: [...newProject.images, ...url],
+        images: [...newProject.images, url],
       })
     }
   }
@@ -915,13 +919,16 @@ export function AdminPanel() {
   // Delete Project
   const handleDeleteProject = async (id: string) => {
     try {
+      console.log("Deleting project with ID:", id)
       const { error } = await supabase.from("projects").delete().eq("id", id)
 
       if (error) throw error
 
       showNotification("success", "The project has been successfully removed.")
+      setProjectToDelete(null)
       fetchProjects()
     } catch (error: any) {
+      console.error("Delete error:", error)
       showNotification("error", `There was a problem deleting the project: ${error.message}`)
     }
   }
@@ -1066,8 +1073,8 @@ export function AdminPanel() {
         )}
       </AnimatePresence>
       <div>
-      <h1 className="text-3xl font-bold tracking-tight">.</h1>
-        </div>
+        <h1 className="text-3xl font-bold tracking-tight">.</h1>
+      </div>
 
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         {/* Header */}
@@ -1184,8 +1191,8 @@ export function AdminPanel() {
                             <div className="grid gap-2">
                               <Label htmlFor="category">Category*</Label>
                               <Select
-                                value={newProject.category}
-                                onChange={(value) => setNewProject({ ...newProject, category: value })}
+                                defaultValue={newProject.category}
+                                onValueChange={(value) => setNewProject({ ...newProject, category: value })}
                               >
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select category" />
@@ -1510,26 +1517,7 @@ export function AdminPanel() {
                         <ArrowUpDown className="ml-1 h-3 w-3" />
                       </Button>
                     </div>
-                    <div className="flex border rounded-md overflow-hidden">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn("rounded-none h-9 w-9", viewMode === "grid" && "bg-muted")}
-                        onClick={() => setViewMode("grid")}
-                      >
-                        <LayoutGrid className="h-4 w-4" />
-                        <span className="sr-only">Grid view</span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn("rounded-none h-9 w-9", viewMode === "list" && "bg-muted")}
-                        onClick={() => setViewMode("list")}
-                      >
-                        <ListFilter className="h-4 w-4" />
-                        <span className="sr-only">List view</span>
-                      </Button>
-                    </div>
+                   
                   </div>
                 </div>
 
@@ -1549,14 +1537,14 @@ export function AdminPanel() {
                       </Button>
                     )}
                   </div>
-                ) : viewMode === "grid" ? (
+                ) : viewMode === "list" ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     <AnimatePresence>
                       {filteredProjects.map((project) => (
                         <ProjectCard
                           key={project.id}
                           project={project}
-                          onEdit={() => setProjectToEdit({ ...project })}
+                          onEdit={(project) => setProjectToEdit({ ...project })}
                           onDelete={() => setProjectToDelete(project)}
                         />
                       ))}
@@ -1727,8 +1715,8 @@ export function AdminPanel() {
                                               <div className="grid gap-2">
                                                 <Label htmlFor="edit-category">Category*</Label>
                                                 <Select
-                                                  value={projectToEdit.category}
-                                                  onChange={(value) =>
+                                                  defaultValue={projectToEdit.category}
+                                                  onValueChange={(value) =>
                                                     setProjectToEdit({ ...projectToEdit, category: value })
                                                   }
                                                 >
@@ -1926,7 +1914,10 @@ export function AdminPanel() {
                                           variant="ghost"
                                           size="icon"
                                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                          onClick={() => setProjectToDelete(project)}
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setProjectToDelete(project)
+                                          }}
                                         >
                                           <Trash2 className="h-4 w-4" />
                                           <span className="sr-only">Delete</span>
@@ -1943,7 +1934,11 @@ export function AdminPanel() {
                                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                                           <AlertDialogAction
                                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                            onClick={() => handleDeleteProject(project.id)}
+                                            onClick={() => {
+                                              if (projectToDelete) {
+                                                handleDeleteProject(projectToDelete.id)
+                                              }
+                                            }}
                                           >
                                             Delete
                                           </AlertDialogAction>
@@ -2200,7 +2195,12 @@ export function AdminPanel() {
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction
                                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                      onClick={() => handleDeleteLogo(selectedLogo.id)}
+                                      onClick={() => {
+                                        if (logoToDelete) {
+                                          handleDeleteLogo(logoToDelete.id)
+                                          setSelectedLogo(null)
+                                        }
+                                      }}
                                     >
                                       Delete
                                     </AlertDialogAction>
@@ -2255,7 +2255,7 @@ export function AdminPanel() {
             <div className="text-sm text-muted-foreground">
               © {new Date().getFullYear()} Yesp Web Studio. All rights reserved.
             </div>
-          
+            <div className="flex items-center gap-2"></div>
           </CardFooter>
         </Card>
       </div>
