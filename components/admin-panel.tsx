@@ -49,8 +49,6 @@ import {
   GripVertical,
   LogOut,
   ExternalLink,
-  LayoutGrid,
-  ListFilter,
   ArrowUpDown,
   Eye,
 } from "lucide-react"
@@ -83,8 +81,6 @@ type Project = {
   description?: string
   location?: string
   client?: string
-  area?: string
-  year?: string
   images?: string[]
   created_at?: string
 }
@@ -97,6 +93,15 @@ type ClientLogo = {
   image: string
   created_at?: string
   position?: number
+}
+
+// Hero Slide type definition
+type HeroSlide = {
+  id: string
+  title: string
+  description?: string
+  image: string
+  created_at?: string
 }
 
 // Sortable Logo Item Props
@@ -290,28 +295,6 @@ function ProjectCard({
               <span>{project.location}</span>
             </div>
           )}
-          {project.year && (
-            <div className="flex items-center gap-1">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="lucide lucide-calendar"
-              >
-                <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-                <line x1="16" x2="16" y1="2" y2="6" />
-                <line x1="8" x2="8" y1="2" y2="6" />
-                <line x1="3" x2="21" y1="10" y2="10" />
-              </svg>
-              <span>{project.year}</span>
-            </div>
-          )}
         </div>
         <div className="flex justify-between items-center pt-2 border-t">
           <Dialog>
@@ -366,14 +349,6 @@ function ProjectCard({
                   <div>
                     <h3 className="text-sm font-medium text-muted-foreground">Client</h3>
                     <p>{project.client || "Not specified"}</p>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground">Area</h3>
-                    <p>{project.area || "Not specified"}</p>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground">Year</h3>
-                    <p>{project.year || "Not specified"}</p>
                   </div>
                 </div>
                 {project.description && (
@@ -439,8 +414,6 @@ export function AdminPanel() {
     description: "",
     location: "",
     client: "",
-    area: "",
-    year: "",
     images: [] as string[],
   })
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
@@ -449,6 +422,7 @@ export function AdminPanel() {
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const logoFileInputRef = useRef<HTMLInputElement>(null)
+  const slideFileInputRef = useRef<HTMLInputElement>(null)
 
   // Client logos state
   const [clientLogos, setClientLogos] = useState<ClientLogo[]>([])
@@ -462,6 +436,15 @@ export function AdminPanel() {
   const [selectedLogo, setSelectedLogo] = useState<ClientLogo | null>(null)
   const [logoOrder, setLogoOrder] = useState<string[]>([])
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
+
+  // Hero slides state
+  const [slides, setSlides] = useState<HeroSlide[]>([])
+  const [newSlide, setNewSlide] = useState({
+    title: "",
+    description: "",
+    image: "",
+  })
+  const [isUploadingSlide, setIsUploadingSlide] = useState(false)
 
   const router = useRouter()
 
@@ -687,7 +670,38 @@ export function AdminPanel() {
 
       // Process each file
       for (let i = 0; i < files.length; i++) {
-        const file = files[i]
+        let file = files[i]
+
+        // Check if file is HEIC format and convert if needed
+        if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
+          try {
+            // Use dynamic import with client-side check
+            if (typeof window !== "undefined") {
+              const heic2anyModule = await import("heic2any")
+              const convertedBlob = (await heic2anyModule.default({
+                blob: file,
+                toType: "image/jpeg",
+                quality: 0.8,
+              })) as Blob
+
+              // Create a new file from the converted blob
+              file = new File([convertedBlob], file.name.replace(/\.heic$/i, ".jpg"), {
+                type: "image/jpeg",
+                lastModified: new Date().getTime(),
+              })
+
+              console.log("HEIC image converted successfully")
+            } else {
+              // Skip HEIC files during server-side rendering
+              console.log("Skipping HEIC conversion during server-side rendering")
+              continue
+            }
+          } catch (conversionError) {
+            console.error("HEIC conversion error:", conversionError)
+            showNotification("error", `Failed to convert HEIC image: ${file.name}`)
+            continue // Skip this file and move to the next one
+          }
+        }
 
         // Create a unique file name
         const fileExt = file.name.split(".").pop()
@@ -745,7 +759,38 @@ export function AdminPanel() {
 
     try {
       setIsUploadingLogo(true)
-      const file = files[0] // Only use the first file for logos
+      let file = files[0] // Only use the first file for logos
+
+      // Check if file is HEIC format and convert if needed
+      if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
+        try {
+          // Use dynamic import with client-side check
+          if (typeof window !== "undefined") {
+            const heic2anyModule = await import("heic2any")
+            const convertedBlob = (await heic2anyModule.default({
+              blob: file,
+              toType: "image/jpeg",
+              quality: 0.8,
+            })) as Blob
+
+            // Create a new file from the converted blob
+            file = new File([convertedBlob], file.name.replace(/\.heic$/i, ".jpg"), {
+              type: "image/jpeg",
+              lastModified: new Date().getTime(),
+            })
+
+            console.log("HEIC logo image converted successfully")
+          } else {
+            // Skip HEIC files during server-side rendering
+            console.log("Skipping HEIC conversion during server-side rendering")
+            return
+          }
+        } catch (conversionError) {
+          console.error("HEIC conversion error:", conversionError)
+          showNotification("error", `Failed to convert HEIC image: ${file.name}`)
+          return
+        }
+      }
 
       // Create a unique file name
       const fileExt = file.name.split(".").pop()
@@ -789,9 +834,89 @@ export function AdminPanel() {
     }
   }
 
+  // Handle Slide Upload
+  const handleSlideUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    try {
+      setIsUploadingSlide(true)
+      let file = files[0] // Only use the first file for slides
+
+      // Check if file is HEIC format and convert if needed
+      if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
+        try {
+          // Use dynamic import with client-side check
+          if (typeof window !== "undefined") {
+            const heic2anyModule = await import("heic2any")
+            const convertedBlob = (await heic2anyModule.default({
+              blob: file,
+              toType: "image/jpeg",
+              quality: 0.8,
+            })) as Blob
+
+            // Create a new file from the converted blob
+            file = new File([convertedBlob], file.name.replace(/\.heic$/i, ".jpg"), {
+              type: "image/jpeg",
+              lastModified: new Date().getTime(),
+            })
+
+            console.log("HEIC slide image converted successfully")
+          } else {
+            // Skip HEIC files during server-side rendering
+            console.log("Skipping HEIC conversion during server-side rendering")
+            return
+          }
+        } catch (conversionError) {
+          console.error("HEIC conversion error:", conversionError)
+          showNotification("error", `Failed to convert HEIC image: ${file.name}`)
+          return
+        }
+      }
+
+      // Create a unique file name
+      const fileExt = file.name.split(".").pop()
+      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
+      const filePath = `slide-images/${fileName}`
+
+      // Upload the file to Supabase Storage
+      const { error: uploadError } = await supabase.storage.from("projects").upload(filePath, file)
+
+      if (uploadError) {
+        throw uploadError
+      }
+
+      // Get the public URL
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("projects").getPublicUrl(filePath)
+
+      // Update the slide image URL
+      setNewSlide({
+        ...newSlide,
+        image: publicUrl,
+      })
+
+      showNotification("success", "Slide image uploaded successfully!")
+    } catch (error: any) {
+      showNotification("error", `Slide image upload failed: ${error.message}`)
+    } finally {
+      setIsUploadingSlide(false)
+      // Reset file input
+      if (slideFileInputRef.current) {
+        slideFileInputRef.current.value = ""
+      }
+    }
+  }
+
   // Trigger logo file input click
   const triggerLogoFileInput = () => {
     logoFileInputRef.current?.click()
+  }
+
+  // Trigger slide file input click
+  const triggerSlideFileInput = () => {
+    slideFileInputRef.current?.click()
   }
 
   // Remove image from array
@@ -847,9 +972,6 @@ export function AdminPanel() {
             category: newProject.category,
             description: newProject.description,
             location: newProject.location,
-            client: newProject.client,
-            area: newProject.area,
-            year: newProject.year,
             images: newProject.images,
           },
         ])
@@ -863,8 +985,6 @@ export function AdminPanel() {
         description: "",
         location: "",
         client: "",
-        area: "",
-        year: "",
         images: [],
       })
 
@@ -916,6 +1036,44 @@ export function AdminPanel() {
     }
   }
 
+  // Add Slide
+  const handleAddSlide = async () => {
+    if (!newSlide.title || !newSlide.image) {
+      showNotification("error", "Please provide both title and image for the hero slide.")
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+
+      const { data, error } = await supabase
+        .from("hero_slides")
+        .insert([
+          {
+            title: newSlide.title,
+            description: newSlide.description,
+            image: newSlide.image,
+          },
+        ])
+        .select()
+
+      if (error) throw error
+
+      setNewSlide({
+        title: "",
+        description: "",
+        image: "",
+      })
+
+      showNotification("success", `${newSlide.title} slide has been successfully added.`)
+      // fetchSlides(); // Assuming you have a fetchSlides function
+    } catch (error: any) {
+      showNotification("error", `There was a problem adding the slide: ${error.message}`)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   // Delete Project
   const handleDeleteProject = async (id: string) => {
     try {
@@ -947,9 +1105,6 @@ export function AdminPanel() {
           category: projectToEdit.category,
           description: projectToEdit.description,
           location: projectToEdit.location,
-          client: projectToEdit.client,
-          area: projectToEdit.area,
-          year: projectToEdit.year,
           images: projectToEdit.images,
         })
         .eq("id", projectToEdit.id)
@@ -1153,6 +1308,25 @@ export function AdminPanel() {
                     </svg>
                     Client Logos
                   </TabsTrigger>
+                  <TabsTrigger value="slides" className="gap-1.5">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="lucide lucide-image"
+                    >
+                      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                    Hero Slides
+                  </TabsTrigger>
                 </TabsList>
                 <div className="flex items-center gap-2">
                   <Button
@@ -1168,7 +1342,7 @@ export function AdminPanel() {
                     <DialogTrigger asChild>
                       <Button className="gap-1.5">
                         <Plus className="h-4 w-4" />
-                        Add {activeTab === "projects" ? "Project" : "Logo"}
+                        Add {activeTab === "projects" ? "Project" : activeTab === "logos" ? "Logo" : "Slide"}
                       </Button>
                     </DialogTrigger>
                     {activeTab === "projects" ? (
@@ -1240,27 +1414,6 @@ export function AdminPanel() {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-2">
-                              <Label htmlFor="area">Area</Label>
-                              <Input
-                                id="area"
-                                value={newProject.area}
-                                onChange={(e) => setNewProject({ ...newProject, area: e.target.value })}
-                                placeholder="e.g. 80,000 Sqft"
-                              />
-                            </div>
-                            <div className="grid gap-2">
-                              <Label htmlFor="year">Year</Label>
-                              <Input
-                                id="year"
-                                value={newProject.year}
-                                onChange={(e) => setNewProject({ ...newProject, year: e.target.value })}
-                                placeholder="e.g. 2023"
-                              />
-                            </div>
-                          </div>
-
                           <div className="grid gap-2">
                             <Label htmlFor="images">Project Images</Label>
                             <div className="flex flex-col gap-3">
@@ -1268,7 +1421,7 @@ export function AdminPanel() {
                                 type="file"
                                 ref={fileInputRef}
                                 className="hidden"
-                                accept="image/*"
+                                accept="image/*,.heic,.HEIC"
                                 onChange={handleImageUpload}
                                 multiple
                               />
@@ -1365,7 +1518,7 @@ export function AdminPanel() {
                           </Button>
                         </DialogFooter>
                       </DialogContent>
-                    ) : (
+                    ) : activeTab === "logos" ? (
                       <DialogContent className="max-w-md">
                         <DialogHeader>
                           <DialogTitle>Add Client Logo</DialogTitle>
@@ -1399,7 +1552,7 @@ export function AdminPanel() {
                                 type="file"
                                 ref={logoFileInputRef}
                                 className="hidden"
-                                accept="image/*"
+                                accept="image/*,.heic,.HEIC"
                                 onChange={handleLogoUpload}
                               />
 
@@ -1467,6 +1620,108 @@ export function AdminPanel() {
                           </Button>
                         </DialogFooter>
                       </DialogContent>
+                    ) : (
+                      <DialogContent className="max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Add Hero Slide</DialogTitle>
+                          <DialogDescription>Add a new hero slide to display on your website.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="slide-title">Title*</Label>
+                            <Input
+                              id="slide-title"
+                              value={newSlide.title}
+                              onChange={(e) => setNewSlide({ ...newSlide, title: e.target.value })}
+                              placeholder="Enter slide title"
+                            />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="slide-description">Description</Label>
+                            <Textarea
+                              id="slide-description"
+                              value={newSlide.description}
+                              onChange={(e) => setNewSlide({ ...newSlide, description: e.target.value })}
+                              placeholder="Enter slide description"
+                            />
+                          </div>
+
+                          {/* Slide Image Upload Section */}
+                          <div className="grid gap-2">
+                            <Label htmlFor="slide-image">Slide Image*</Label>
+                            <div className="flex flex-col gap-3">
+                              <input
+                                type="file"
+                                ref={slideFileInputRef}
+                                className="hidden"
+                                accept="image/*,.heic,.HEIC"
+                                onChange={handleSlideUpload}
+                              />
+
+                              <div
+                                onClick={triggerSlideFileInput}
+                                className={cn(
+                                  "border-2 border-dashed rounded-md p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all",
+                                  isUploadingSlide
+                                    ? "bg-muted/50 border-muted"
+                                    : "hover:bg-muted/50 hover:border-primary/50 hover:scale-[0.99]",
+                                )}
+                              >
+                                {isUploadingSlide ? (
+                                  <Loader2 className="h-10 w-10 text-muted-foreground animate-spin" />
+                                ) : (
+                                  <Upload className="h-10 w-10 text-muted-foreground" />
+                                )}
+                                <p className="text-sm font-medium">
+                                  {isUploadingSlide ? "Uploading..." : "Click to upload slide image"}
+                                </p>
+                                <p className="text-xs text-muted-foreground">SVG, PNG, JPG or GIF (max. 2MB)</p>
+                              </div>
+
+                              <div className="flex items-center mt-4">
+                                <div className="h-px flex-1 bg-muted"></div>
+                                <span className="px-2 text-xs text-muted-foreground">or add image URL</span>
+                                <div className="h-px flex-1 bg-muted"></div>
+                              </div>
+
+                              {/* Add image URL directly */}
+                              <div className="flex gap-2 mt-2">
+                                <Input
+                                  id="slideImageUrl"
+                                  placeholder="Enter slide image URL"
+                                  className="flex-1"
+                                  value={newSlide.image}
+                                  onChange={(e) => setNewSlide({ ...newSlide, image: e.target.value })}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-2">
+                            {newSlide.image && (
+                              <div className="border rounded-md p-4 flex justify-center bg-muted/20">
+                                <img
+                                  src={newSlide.image || "/placeholder.svg"}
+                                  alt="Slide preview"
+                                  className="h-20 object-contain"
+                                  onError={(e) => {
+                                    ;(e.target as HTMLImageElement).src = "/placeholder.svg?height=80&width=120"
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                          </DialogClose>
+                          <Button onClick={handleAddSlide} disabled={isSubmitting}>
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Add Slide
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
                     )}
                   </Dialog>
                 </div>
@@ -1517,7 +1772,6 @@ export function AdminPanel() {
                         <ArrowUpDown className="ml-1 h-3 w-3" />
                       </Button>
                     </div>
-                   
                   </div>
                 </div>
 
@@ -1559,8 +1813,6 @@ export function AdminPanel() {
                             <th className="border-b p-3 text-left">Project</th>
                             <th className="border-b p-3 text-left">Category</th>
                             <th className="border-b p-3 text-left">Location</th>
-                            <th className="border-b p-3 text-left">Area</th>
-                            <th className="border-b p-3 text-left">Year</th>
                             <th className="border-b p-3 text-right">Actions</th>
                           </tr>
                         </thead>
@@ -1602,8 +1854,6 @@ export function AdminPanel() {
                                   </Badge>
                                 </td>
                                 <td className="border-b p-3">{project.location || "-"}</td>
-                                <td className="border-b p-3">{project.area || "-"}</td>
-                                <td className="border-b p-3">{project.year || "-"}</td>
                                 <td className="border-b p-3 text-right">
                                   <div className="flex justify-end gap-2">
                                     <Dialog>
@@ -1662,14 +1912,6 @@ export function AdminPanel() {
                                             <div>
                                               <h3 className="text-sm font-medium text-muted-foreground">Client</h3>
                                               <p>{project.client || "Not specified"}</p>
-                                            </div>
-                                            <div>
-                                              <h3 className="text-sm font-medium text-muted-foreground">Area</h3>
-                                              <p>{project.area || "Not specified"}</p>
-                                            </div>
-                                            <div>
-                                              <h3 className="text-sm font-medium text-muted-foreground">Year</h3>
-                                              <p>{project.year || "Not specified"}</p>
                                             </div>
                                           </div>
                                           {project.description && (
@@ -1772,31 +2014,6 @@ export function AdminPanel() {
                                               </div>
                                             </div>
 
-                                            <div className="grid grid-cols-2 gap-4">
-                                              <div className="grid gap-2">
-                                                <Label htmlFor="edit-area">Area</Label>
-                                                <Input
-                                                  id="edit-area"
-                                                  value={projectToEdit.area || ""}
-                                                  onChange={(e) =>
-                                                    setProjectToEdit({ ...projectToEdit, area: e.target.value })
-                                                  }
-                                                  placeholder="e.g. 80,000 Sqft"
-                                                />
-                                              </div>
-                                              <div className="grid gap-2">
-                                                <Label htmlFor="edit-year">Year</Label>
-                                                <Input
-                                                  id="edit-year"
-                                                  value={projectToEdit.year || ""}
-                                                  onChange={(e) =>
-                                                    setProjectToEdit({ ...projectToEdit, year: e.target.value })
-                                                  }
-                                                  placeholder="e.g. 2023"
-                                                />
-                                              </div>
-                                            </div>
-
                                             <div className="grid gap-2">
                                               <Label htmlFor="edit-images">Project Images</Label>
                                               <div className="flex flex-col gap-3">
@@ -1804,7 +2021,7 @@ export function AdminPanel() {
                                                   type="file"
                                                   ref={fileInputRef}
                                                   className="hidden"
-                                                  accept="image/*"
+                                                  accept="image/*,.heic,.HEIC"
                                                   onChange={handleImageUpload}
                                                   multiple
                                                 />
@@ -2099,7 +2316,7 @@ export function AdminPanel() {
                                             type="file"
                                             ref={logoFileInputRef}
                                             className="hidden"
-                                            accept="image/*"
+                                            accept="image/*,.heic,.HEIC"
                                             onChange={handleLogoUpload}
                                           />
 
@@ -2249,6 +2466,13 @@ export function AdminPanel() {
                   </div>
                 </div>
               </TabsContent>
+              <TabsContent value="slides" className="mt-0">
+                <div>
+                  <h1 className="text-3xl font-bold tracking-tight">Hero Slides</h1>
+                  <p className="text-muted-foreground mt-1">Manage your hero slides</p>
+                </div>
+              </TabsContent>
+              
             </Tabs>
           </CardContent>
           <CardFooter className="border-t bg-muted/10 flex flex-col sm:flex-row items-center justify-between gap-2 px-6 py-4">

@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Mail, Phone, MapPin, Facebook, Twitter, Linkedin, Instagram } from "lucide-react"
-
+import logo from "@/public/logo.png"
+import Image from "next/image"
 export default function Footer() {
   return (
     <footer className="bg-[#2A5D3C] text-white">
@@ -8,38 +9,25 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           <div>
             <div className="flex items-center space-x-2 mb-6">
-              <div className="relative h-10 w-10">
-                <svg width="100%" height="100%" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="100" cy="100" r="100" fill="white" />
-                  <path
-                    d="M50 50 L100 50 L50 150 L100 150"
-                    stroke="#2A5D3C"
-                    strokeWidth="12"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M100 50 L150 150"
-                    stroke="#2A5D3C"
-                    strokeWidth="12"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M75 100 L125 100"
-                    stroke="#2A5D3C"
-                    strokeWidth="12"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
+            <Link href="/" className="flex items-center space-x-2">
+  <div className="bg-white/50 shadow-xl rounded-full p-1">
+    <Image 
+      src={logo || "/placeholder.svg"} 
+      alt="Logo" 
+      width={40} 
+      height={40} 
+      className="rounded-full"
+    />
+  </div>
+</Link>
+
+
               <span className="font-bold text-xl">Engineering & Construction</span>
             </div>
             <p className="text-gray-200 mb-4">
               Expert construction services for infrastructure, industrial, commercial, and residential projects.
             </p>
-            <div className="flex space-x-4">
+            {/* <div className="flex space-x-4">
               <a href="#" className="text-white hover:text-[#3D8361] transition-colors">
                 <Facebook size={20} />
               </a>
@@ -52,7 +40,7 @@ export default function Footer() {
               <a href="#" className="text-white hover:text-[#3D8361] transition-colors">
                 <Instagram size={20} />
               </a>
-            </div>
+            </div> */}
           </div>
 
           <div>

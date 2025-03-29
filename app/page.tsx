@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useEffect, useState } from "react"
 import Navbar from ".././components/navbar"
 import Footer from ".././components/footer"
@@ -30,33 +32,45 @@ type ClientLogo = {
   image: string
 }
 
+// Hero slider data
+const heroSlides = [
+  {
+    id: 1,
+    image: "/contact.jpg",
+    title: "Building Excellence, Constructing Trust",
+    description:
+      "K Engineering & Construction delivers exceptional infrastructure, industrial, commercial, and residential projects with precision and expertise.",
+  }
+
+]
+
 function getProjectImages(project: Project): string[] {
   // First try to get images from the images array
   if (project.images && project.images.length > 0) {
-    return project.images.map(img => 
-      img?.startsWith('http') || img?.startsWith('/') 
-        ? img 
-        : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/projects/${img}`
+    return project.images.map((img) =>
+      img?.startsWith("http") || img?.startsWith("/")
+        ? img
+        : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/projects/${img}`,
     )
   }
-  
+
   // Fallback to image field
   const imageField = project.image
-  if (!imageField) return ['/placeholder.svg']
-  
+  if (!imageField) return ["/placeholder.svg"]
+
   if (Array.isArray(imageField)) {
-    return imageField.map(img => 
-      img?.startsWith('http') || img?.startsWith('/') 
-        ? img 
-        : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/projects/${img}`
+    return imageField.map((img) =>
+      img?.startsWith("http") || img?.startsWith("/")
+        ? img
+        : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/projects/${img}`,
     )
   }
-  
+
   // Handle single image string
   return [
-    imageField.startsWith('http') || imageField.startsWith('/') 
-      ? imageField 
-      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/projects/${imageField}`
+    imageField.startsWith("http") || imageField.startsWith("/")
+      ? imageField
+      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/projects/${imageField}`,
   ]
 }
 
@@ -69,11 +83,36 @@ export default function FeaturedProjects() {
   const [clientLogos, setClientLogos] = useState<ClientLogo[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
 
+  // Hero slider state
+  const [currentSlide, setCurrentSlide] = useState(0)
+  const totalSlides = heroSlides.length
+
+  useEffect(() => {
+    // Auto-advance the slider every 5 seconds
+    const slideInterval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % totalSlides)
+    }, 5000)
+
+    return () => clearInterval(slideInterval)
+  }, [totalSlides])
+
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev + 1) % totalSlides)
+  }
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev - 1 + totalSlides) % totalSlides)
+  }
+
+  const goToSlide = (index: number) => {
+    setCurrentSlide(index)
+  }
+
   useEffect(() => {
     async function loadData() {
       try {
         setIsLoading(true)
-        
+
         // Fetch projects from Supabase
         const { data: projectsData, error: projectsError } = await supabase
           .from("projects")
@@ -84,19 +123,17 @@ export default function FeaturedProjects() {
         if (projectsError) throw projectsError
 
         // Process projects data
-        const processedProjects = projectsData?.map(project => ({
-          ...project,
-          // Keep both image and images fields for compatibility
-          image: project.image || null,
-          images: project.images || (project.image ? 
-            (Array.isArray(project.image) ? project.image : [project.image]) 
-            : [])
-        })) || []
+        const processedProjects =
+          projectsData?.map((project) => ({
+            ...project,
+            // Keep both image and images fields for compatibility
+            image: project.image || null,
+            images:
+              project.images || (project.image ? (Array.isArray(project.image) ? project.image : [project.image]) : []),
+          })) || []
 
         // Fetch client logos
-        const { data: logosData, error: logosError } = await supabase
-          .from("client_logos")
-          .select("*")
+        const { data: logosData, error: logosError } = await supabase.from("client_logos").select("*")
 
         if (logosError) throw logosError
 
@@ -144,29 +181,81 @@ export default function FeaturedProjects() {
     <div className="min-h-screen flex flex-col">
       <Navbar />
 
-      {/* Hero Section */}
-      <section className="pt-24 lg:pt-32 relative">
-        <div className="absolute inset-0 bg-black/40 z-10"></div>
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/contact.jpg')" }}></div>
-        <div className="container mx-auto px-4 py-20 md:py-32 relative z-20 text-white">
-          <div className="max-w-3xl">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">
-              Building Excellence, <br />
-              Constructing Trust
-            </h1>
-            <p className="text-lg md:text-xl mb-8 text-gray-100 max-w-2xl">
-              K Engineering & Construction delivers exceptional infrastructure, industrial, commercial, and residential
-              projects with precision and expertise.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <Button size="lg" className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white">
-                <Link href="/projects">Our Projects</Link>
-              </Button>
-              <Button size="lg" variant="outline" className="bg-transparent text-white border-white hover:bg-white/10">
-                <Link href="/contact">Contact Us</Link>
-              </Button>
+      {/* Hero Section Slider */}
+      <section className="pt-24 lg:pt-32 relative h-[600px] overflow-hidden">
+        {/* Slides container with transition */}
+        <div
+          className="absolute inset-0 transition-transform duration-700 ease-in-out flex"
+          style={{ transform: `translateX(-${currentSlide * 100}%)` }}
+        >
+          {heroSlides.map((slide, index) => (
+            <div key={slide.id} className="min-w-full h-full relative">
+              <div
+                className="absolute inset-0 bg-cover bg-center"
+                style={{ backgroundImage: `url('${slide.image}')` }}
+              ></div>
+              <div className="absolute inset-0 bg-black/20"></div>
+              <div className="container relative mx-auto px-4 py-20 md:py-32 z-20 text-white h-full flex items-center">
+                <div className="max-w-3xl">
+                  <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">{slide.title}</h1>
+                  <p className="text-lg md:text-xl mb-8 text-gray-100 max-w-2xl">{slide.description}</p>
+                  <div className="flex flex-wrap gap-4 relative z-50">
+                    <Link href="/projects" passHref>
+                      <Button asChild size="lg" className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white">
+                        <span>Our Projects</span>
+                      </Button>
+                    </Link>
+                    <Link href="/contact" passHref>
+                      <Button
+                        asChild
+                        size="lg"
+                        variant="outline"
+                        className="bg-transparent text-white border-white hover:bg-white/10"
+                      >
+                        <span>Contact Us</span>
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          ))}
+        </div>
+
+        {/* Navigation arrows */}
+        <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between z-30 px-4 md:px-10 pointer-events-none">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="bg-black/30 text-white hover:bg-black/50 rounded-full h-12 w-12 pointer-events-auto"
+            onClick={prevSlide}
+          >
+            <ChevronLeft className="h-6 w-6" />
+            <span className="sr-only">Previous slide</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="bg-black/30 text-white hover:bg-black/50 rounded-full h-12 w-12 pointer-events-auto"
+            onClick={nextSlide}
+          >
+            <ChevronRight className="h-6 w-6" />
+            <span className="sr-only">Next slide</span>
+          </Button>
+        </div>
+
+        {/* Slide indicators */}
+        <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2 z-30 pointer-events-none">
+          {heroSlides.map((_, index) => (
+            <button
+              key={index}
+              className={`w-3 h-3 rounded-full transition-all pointer-events-auto ${
+                index === currentSlide ? "bg-white w-8" : "bg-white/50"
+              }`}
+              onClick={() => goToSlide(index)}
+              aria-label={`Go to slide ${index + 1}`}
+            />
+          ))}
         </div>
       </section>
 
@@ -284,7 +373,7 @@ export default function FeaturedProjects() {
                         priority
                         unoptimized={images[0]?.startsWith("http")}
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/placeholder.svg'
+                          ;(e.target as HTMLImageElement).src = "/placeholder.svg"
                         }}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
@@ -337,11 +426,11 @@ export default function FeaturedProjects() {
             <div className="flex animate-scroll space-x-8">
               {[...clientLogos, ...clientLogos].map((logo, index) => (
                 <div key={`${logo.id}-${index}`} className="w-40 h-32 flex items-center justify-center">
-                  <Image 
-                    src={logo.image || "/placeholder.svg"} 
-                    alt={logo.name} 
-                    width={150} 
-                    height={100} 
+                  <Image
+                    src={logo.image || "/placeholder.svg"}
+                    alt={logo.name}
+                    width={150}
+                    height={100}
                     className="max-h-20 w-auto object-contain"
                     unoptimized={logo.image?.startsWith("http")}
                   />
@@ -363,9 +452,7 @@ export default function FeaturedProjects() {
             <Button size="lg" className="bg-white text-[#2A5D3C] hover:bg-gray-100">
               <Link href="/contact">Contact Us</Link>
             </Button>
-            <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
-              <Link href="/projects">View Our Work</Link>
-            </Button>
+         
           </div>
         </div>
       </section>
@@ -383,10 +470,8 @@ export default function FeaturedProjects() {
           >
             {selectedProject && (
               <div className="relative">
-                <DialogTitle className="sr-only">
-                  {selectedProject.name || "Project Details"}
-                </DialogTitle>
-                
+                <DialogTitle className="sr-only">{selectedProject.name || "Project Details"}</DialogTitle>
+
                 <Button
                   variant="ghost"
                   size="icon"
@@ -405,7 +490,7 @@ export default function FeaturedProjects() {
                     className="object-contain"
                     unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/placeholder.svg'
+                      ;(e.target as HTMLImageElement).src = "/placeholder.svg"
                     }}
                   />
                 </div>
@@ -468,3 +553,4 @@ export default function FeaturedProjects() {
     </div>
   )
 }
+

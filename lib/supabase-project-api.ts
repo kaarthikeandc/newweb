@@ -8,8 +8,7 @@ type Project = {
   description?: string;
   location?: string;
   client?: string;
-  area?: string;
-  year?: string;
+ 
   image?: string;
   created_at?: string;
 };
