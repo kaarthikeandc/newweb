@@ -10,7 +10,7 @@ export default function Footer() {
           <div>
             <div className="flex items-center space-x-2 mb-6">
             <Link href="/" className="flex items-center space-x-2">
- <div className="bg-white/100 shadow-xl rounded-lg p-1 w-12 h-12">
+ <div className="bg-white/100 shadow-xl rounded-lg p-2 w-12 h-12">
     <Image 
       src={logo || "/placeholder.svg"} 
       alt="Logo" 
