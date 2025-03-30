@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { UploadIcon } from "lucide-react"; // or from your icon library
+ // or from your icon library; // or from your icon library
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import {
   Dialog,
@@ -42,7 +42,7 @@ import {
   Trash2,
   RefreshCw,
   AlertCircle,
-  CheckCircle2,
+  CheckCircle2,UploadIcon,
   X,
   Upload,
   ImageIcon,
