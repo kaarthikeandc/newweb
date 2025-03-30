@@ -98,13 +98,12 @@ type ClientLogo = {
 
 // Hero Slide type definition
 type HeroSlide = {
-  id: string
-  title: string
-  description?: string
-  image: string
-  created_at?: string
-}
-
+  id: string;
+  title: string;
+  description?: string;
+  image: string; // Ensure this is string, not string | null
+  created_at?: string;
+};
 // Page Hero type definition
 type PageHero = {
   id: string
@@ -818,102 +817,72 @@ const AdminPanel = () => {
 
   // Handle Image Upload
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    
-    const files = event.target.files
-    if (!files || files.length === 0) return
-
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+  
     try {
-      setIsUploading(true)
-      const uploadedUrls: string[] = []
-
-      // Process each file
-      for (let i = 0; i < files.length; i++) {
-        let file = files[i]
-
-        // Check if file is HEIC format and convert if needed
-        if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
-          try {
-            // Use dynamic import with client-side check
-            if (typeof window !== "undefined") {
-              const heic2anyModule = await import("heic2any")
-              const convertedBlob = (await heic2anyModule.default({
-                blob: file,
-                toType: "image/jpeg",
-                quality: 0.8,
-              })) as Blob
-
-              // Create a new file from the converted blob
-              file = new File([convertedBlob], file.name.replace(/\.heic$/i, ".jpg"), {
-                type: "image/jpeg",
-                lastModified: new Date().getTime(),
-              })
-
-              console.log("HEIC image converted successfully")
-            } else {
-              // Skip HEIC files during server-side rendering
-              console.log("Skipping HEIC conversion during server-side rendering")
-              continue
-            }
-          } catch (conversionError) {
-            console.error("HEIC conversion error:", conversionError)
-            showNotification("error", `Failed to convert HEIC image: ${file.name}`)
-            continue // Skip this file and move to the next one
+      setIsUploading(true);
+      const file = files[0]; // Assuming single file upload for hero slide
+  
+      // Check if file is HEIC format and convert if needed
+      if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
+        try {
+          if (typeof window !== "undefined") {
+            const heic2anyModule = await import("heic2any");
+            const convertedBlob = (await heic2anyModule.default({
+              blob: file,
+              toType: "image/jpeg",
+              quality: 0.8,
+            })) as Blob;
+  
+            file = new File([convertedBlob], file.name.replace(/\.heic$/i, ".jpg"), {
+              type: "image/jpeg",
+              lastModified: new Date().getTime(),
+            });
           }
+        } catch (conversionError) {
+          console.error("HEIC conversion error:", conversionError);
+          showNotification("error", `Failed to convert HEIC image: ${file.name}`);
+          return;
         }
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          setEditingSlide((prev) => (prev ? { ...prev, image: e.target.result } : null));
+      }
+  
+      // Create a unique file name
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+      const filePath = `hero-slides/${fileName}`;
+  
+      // Upload the file to Supabase Storage first
+      const { error: uploadError } = await supabase.storage
+        .from("hero-slides")
+        .upload(filePath, file);
+  
+      if (uploadError) {
+        throw uploadError;
+      }
+  
+      // Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from("hero-slides")
+        .getPublicUrl(filePath);
+  
+      // Update the editing slide with the new URL
+      setEditingSlide(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          image: publicUrl // This is now definitely a string
         };
-        reader.readAsDataURL(file);
-        // Create a unique file name
-        const fileExt = file.name.split(".").pop()
-        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
-        const filePath = `project-images/${fileName}`
-
-        // Upload the file to Supabase Storage
-        const { error: uploadError } = await supabase.storage.from("projects").upload(filePath, file)
-
-        if (uploadError) {
-          throw uploadError
-        }
-
-        // Get the public URL
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("projects").getPublicUrl(filePath)
-
-        uploadedUrls.push(publicUrl)
-      }
-
-      // Update the project images array
-      if (projectToEdit) {
-        setProjectToEdit({
-          ...projectToEdit,
-          images: [...(projectToEdit.images || []), ...uploadedUrls],
-        })
-      } else {
-        setNewProject({
-          ...newProject,
-          images: [...newProject.images, ...uploadedUrls],
-        })
-      }
-
-      showNotification(
-        "success",
-        `${uploadedUrls.length} image${uploadedUrls.length > 1 ? "s" : ""} uploaded successfully!`,
-      )
+      });
+  
+      showNotification("success", "Image uploaded successfully!");
     } catch (error: any) {
-      showNotification("error", `Upload failed: ${error.message}`)
-      console.error("Upload error details:", error)
+      showNotification("error", `Upload failed: ${error.message}`);
+      console.error("Upload error details:", error);
     } finally {
-      setIsUploading(false)
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""
-      }
+      setIsUploading(false);
     }
-  }
-
+  };
   // Handle Logo Upload
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
