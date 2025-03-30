@@ -163,17 +163,7 @@ export default function AboutPage() {
       </section>
 
       {/* Contact Section */}
-      <section className="py-16 md:py-24 bg-[#2A5D3C] text-white">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Work With Us?</h2>
-          <p className="text-xl text-gray-200 mb-8 max-w-3xl mx-auto">
-            Contact our team today to discuss your construction needs and how we can bring your vision to life.
-          </p>
-          <Button size="lg" className="bg-white text-[#2A5D3C] hover:bg-gray-100">
-            <Link href="/contact">Contact Us</Link>
-          </Button>
-        </div>
-      </section>
+ 
 
       <Footer />
       </>
