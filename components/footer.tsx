@@ -10,7 +10,7 @@ export default function Footer() {
           <div>
             <div className="flex items-center space-x-2 mb-6">
             <Link href="/" className="flex items-center space-x-2">
-  <div className="bg-white/50 shadow-xl rounded-full p-1">
+  <div className="bg-white/100 shadow-xl rounded-full p-1">
     <Image 
       src={logo || "/placeholder.svg"} 
       alt="Logo" 
@@ -24,9 +24,7 @@ export default function Footer() {
 
               <span className="font-bold text-xl">Engineering & Construction</span>
             </div>
-            <p className="text-gray-200 mb-4">
-              Expert construction services for infrastructure, industrial, commercial, and residential projects.
-            </p>
+           
             {/* <div className="flex space-x-4">
               <a href="#" className="text-white hover:text-[#3D8361] transition-colors">
                 <Facebook size={20} />
