@@ -350,19 +350,7 @@ export default function ContactPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 md:py-24 bg-[#2A5D3C] text-white">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-6">Discover Our Projects Today!</h2>
-          <p className="text-xl text-gray-200 mb-8 max-w-3xl mx-auto">
-            Explore our projects and see how we can bring your vision to life.
-          </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <Button size="lg" className="bg-white text-[#2A5D3C] hover:bg-gray-100">
-              <Link href="/projects">View Our Projects</Link>
-            </Button>
-          </div>
-        </div>
-      </section>
+    
 
       <Footer />
     </div>
