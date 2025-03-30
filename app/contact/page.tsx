@@ -322,28 +322,11 @@ export default function ContactPage() {
                   <div className="bg-[#3D8361]/10 rounded-full p-3 mt-1">
                     <Clock className="h-6 w-6 text-[#3D8361]" />
                   </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">Working Hours</h3>
-                    <p className="text-gray-600">
-                      Monday - Saturday: 9:00 AM - 6:00 PM
-                      <br />
-                      Sunday: Closed
-                    </p>
-                  </div>
+                  
                 </div>
               </div>
 
-              <div className="rounded-lg overflow-hidden h-[300px] relative">
-                <iframe
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d125323.59090489249!2d76.89719493281249!3d11.011724000000002!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ba859af2f971cb5%3A0x2fc1c81e183ed282!2sCoimbatore%2C%20Tamil%20Nadu!5e0!3m2!1sen!2sin!4v1711566000000!5m2!1sen!2sin"
-                  width="100%"
-                  height="100%"
-                  style={{ border: 0 }}
-                  allowFullScreen
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                ></iframe>
-              </div>
+              
             </div>
           </div>
         </div>
