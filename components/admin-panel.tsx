@@ -1,10 +1,9 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabaseClient"
+import { createClient } from "@supabase/supabase-js"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
@@ -51,6 +50,7 @@ import {
   ExternalLink,
   ArrowUpDown,
   Eye,
+  Pencil,
 } from "lucide-react"
 import {
   KeyboardSensor,
@@ -104,6 +104,18 @@ type HeroSlide = {
   created_at?: string
 }
 
+// Page Hero type definition
+type PageHero = {
+  id: string
+  page: "about" | "contact" | "gallery" | "project"
+  title?: string
+  subtitle?: string
+  image?: string
+  video?: string
+  created_at?: string
+  updated_at?: string
+}
+
 // Sortable Logo Item Props
 type SortableLogoItemProps = {
   logo: ClientLogo
@@ -118,6 +130,12 @@ type Notification = {
   type: "success" | "error" | "info"
   message: string
   visible: boolean
+}
+
+// Add a new type for SiteSettings
+type SiteSettings = {
+  key: string
+  value: string
 }
 
 // Sortable Logo Item Component
@@ -213,9 +231,16 @@ function SortableLogoItem({ logo, isSelected, onSelect, onEdit, onDelete }: Sort
   )
 }
 
+// Initialize Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+const supabase = createClient(supabaseUrl, supabaseKey)
+
 // Save Logo Order Function
 const saveLogoOrder = async (logoIds: string[]) => {
   try {
+    console.log("Saving logo order:", logoIds)
+
     // Create an array of updates with position values
     const updates = logoIds.map((id, index) => ({
       id,
@@ -225,8 +250,12 @@ const saveLogoOrder = async (logoIds: string[]) => {
     // Update all logos with their new positions
     const { error } = await supabase.from("client_logos").upsert(updates, { onConflict: "id" })
 
-    if (error) throw error
+    if (error) {
+      console.error("Error saving logo order:", error)
+      throw error
+    }
 
+    console.log("Logo order saved successfully")
     return true
   } catch (error) {
     console.error("Error saving logo order:", error)
@@ -239,7 +268,11 @@ function ProjectCard({
   project,
   onEdit,
   onDelete,
-}: { project: Project; onEdit: (project: Project) => void; onDelete: () => void }) {
+}: {
+  project: Project
+  onEdit: (project: Project) => void
+  onDelete: () => void
+}) {
   return (
     <motion.div
       className="bg-white dark:bg-card rounded-xl shadow-sm border overflow-hidden transition-all hover:shadow-md"
@@ -396,7 +429,7 @@ function ProjectCard({
 }
 
 // Main Admin Panel Component
-export function AdminPanel() {
+const AdminPanel = () => {
   const [projects, setProjects] = useState<Project[]>([])
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([])
   const [user, setUser] = useState<any>(null)
@@ -423,6 +456,7 @@ export function AdminPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const logoFileInputRef = useRef<HTMLInputElement>(null)
   const slideFileInputRef = useRef<HTMLInputElement>(null)
+  const heroFileInputRef = useRef<HTMLInputElement>(null)
 
   // Client logos state
   const [clientLogos, setClientLogos] = useState<ClientLogo[]>([])
@@ -445,6 +479,20 @@ export function AdminPanel() {
     image: "",
   })
   const [isUploadingSlide, setIsUploadingSlide] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [editingSlide, setEditingSlide] = useState<HeroSlide | null>(null)
+  const [slideIdToDelete, setSlideIdToDelete] = useState<string | null>(null)
+
+  // Page heroes state
+  const [pageHeroes, setPageHeroes] = useState<PageHero[]>([])
+  const [selectedPageHero, setSelectedPageHero] = useState<string>("about")
+  const [heroToEdit, setHeroToEdit] = useState<PageHero | null>(null)
+  const [isUploadingHero, setIsUploadingHero] = useState(false)
+
+  // Site settings state
+  const [siteSettings, setSiteSettings] = useState<SiteSettings[]>([])
+  const [isLoadingSiteSettings, setIsLoadingSiteSettings] = useState(false)
 
   const router = useRouter()
 
@@ -496,9 +544,16 @@ export function AdminPanel() {
 
     try {
       setIsRefreshing(true)
+      console.log("Fetching projects...")
+
       const { data, error } = await supabase.from("projects").select("*").order("created_at", { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error("Error fetching projects:", error)
+        throw error
+      }
+
+      console.log("Projects fetched successfully:", data)
 
       if (data) {
         // Convert legacy data (single image) to new format (images array)
@@ -521,6 +576,7 @@ export function AdminPanel() {
         setFilteredProjects(processedData)
       }
     } catch (error: any) {
+      console.error("Project fetch error details:", error)
       showNotification("error", `There was a problem loading the projects: ${error.message}`)
     } finally {
       setIsRefreshing(false)
@@ -533,15 +589,88 @@ export function AdminPanel() {
 
     try {
       setIsRefreshing(true)
+      console.log("Fetching client logos...")
+
       const { data, error } = await supabase.from("client_logos").select("*").order("position", { ascending: true })
+
+      if (error) {
+        console.error("Error fetching logos:", error)
+        throw error
+      }
+
+      console.log("Logos fetched successfully:", data)
+
+      if (data) {
+        setClientLogos(data)
+        // Update logo order when logos are loaded
+        setLogoOrder(data.map((logo) => logo.id))
+      }
+    } catch (error: any) {
+      console.error("Logo fetch error details:", error)
+      showNotification("error", `There was a problem loading the client logos: ${error.message}`)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  // Fetch Page Heroes
+  const fetchPageHeroes = async () => {
+    if (!user) return
+
+    try {
+      setIsRefreshing(true)
+      console.log("Fetching page heroes...")
+
+      const { data, error } = await supabase.from("page_heroes").select("*").order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("Error fetching page heroes:", error)
+        throw error
+      }
+
+      console.log("Page heroes fetched successfully:", data)
+
+      if (data) {
+        setPageHeroes(data)
+
+        // Initialize heroToEdit with the selected page's hero if it exists
+        const selectedHero = data.find((hero) => hero.page === selectedPageHero)
+        if (selectedHero) {
+          setHeroToEdit(selectedHero)
+        } else {
+          setHeroToEdit({
+            id: "",
+            page: selectedPageHero as "about" | "contact" | "gallery" | "project",
+            title: "",
+            subtitle: "",
+            image: "",
+            video: "",
+          })
+        }
+      }
+    } catch (error: any) {
+      console.error("Page hero fetch error details:", error)
+      showNotification("error", `There was a problem loading the page heroes: ${error.message}`)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  // Fetch Hero Slides
+  const fetchSlides = async () => {
+    if (!user) return
+
+    try {
+      setIsRefreshing(true)
+      const { data, error } = await supabase.from("hero_slides").select("*").order("created_at", { ascending: false })
 
       if (error) throw error
 
       if (data) {
-        setClientLogos(data)
+        setSlides(data)
       }
     } catch (error: any) {
-      showNotification("error", `There was a problem loading the client logos: ${error.message}`)
+      showNotification("error", `There was a problem loading the hero slides: ${error.message}`)
     } finally {
       setIsRefreshing(false)
     }
@@ -584,6 +713,14 @@ export function AdminPanel() {
     if (user) {
       fetchProjects()
       fetchLogos()
+      fetchPageHeroes()
+      fetchSlides()
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (user) {
+      fetchSiteSettings()
     }
   }, [user])
 
@@ -593,6 +730,25 @@ export function AdminPanel() {
       setLogoOrder(clientLogos.map((logo) => logo.id))
     }
   }, [clientLogos, logoOrder.length])
+
+  // Add this useEffect to update heroToEdit when selectedPageHero changes
+  useEffect(() => {
+    if (pageHeroes.length > 0) {
+      const selectedHero = pageHeroes.find((hero) => hero.page === selectedPageHero)
+      if (selectedHero) {
+        setHeroToEdit(selectedHero)
+      } else {
+        setHeroToEdit({
+          id: "",
+          page: selectedPageHero as "about" | "contact" | "gallery" | "project",
+          title: "",
+          subtitle: "",
+          image: "",
+          video: "",
+        })
+      }
+    }
+  }, [selectedPageHero, pageHeroes])
 
   // Filter projects based on search query
   useEffect(() => {
@@ -818,6 +974,7 @@ export function AdminPanel() {
       } else {
         setNewLogo({
           ...newLogo,
+
           image: publicUrl,
         })
       }
@@ -909,6 +1066,52 @@ export function AdminPanel() {
     }
   }
 
+  // Handle Hero Image Upload
+  const handleHeroImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    try {
+      setIsUploadingHero(true)
+      const file = files[0]
+
+      // Create a unique file name
+      const fileExt = file.name.split(".").pop()
+      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
+      const filePath = `hero-images/${fileName}`
+
+      // Upload the file to Supabase Storage
+      const { error: uploadError } = await supabase.storage.from("projects").upload(filePath, file)
+
+      if (uploadError) throw uploadError
+
+      // Get the public URL
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("projects").getPublicUrl(filePath)
+
+      // Update the hero image URL
+      setHeroToEdit((prev) =>
+        prev
+          ? { ...prev, image: publicUrl }
+          : {
+              id: "",
+              page: selectedPageHero as "about" | "contact" | "gallery" | "project",
+              image: publicUrl,
+            },
+      )
+
+      showNotification("success", "Hero image uploaded successfully!")
+    } catch (error: any) {
+      showNotification("error", `Hero image upload failed: ${error.message}`)
+    } finally {
+      setIsUploadingHero(false)
+      if (heroFileInputRef.current) {
+        heroFileInputRef.current.value = ""
+      }
+    }
+  }
+
   // Trigger logo file input click
   const triggerLogoFileInput = () => {
     logoFileInputRef.current?.click()
@@ -917,6 +1120,11 @@ export function AdminPanel() {
   // Trigger slide file input click
   const triggerSlideFileInput = () => {
     slideFileInputRef.current?.click()
+  }
+
+  // Trigger hero file input click
+  const triggerHeroFileInput = () => {
+    heroFileInputRef.current?.click()
   }
 
   // Remove image from array
@@ -963,6 +1171,7 @@ export function AdminPanel() {
 
     try {
       setIsSubmitting(true)
+      console.log("Adding new project:", newProject)
 
       const { data, error } = await supabase
         .from("projects")
@@ -972,12 +1181,18 @@ export function AdminPanel() {
             category: newProject.category,
             description: newProject.description,
             location: newProject.location,
+            client: newProject.client,
             images: newProject.images,
           },
         ])
         .select()
 
-      if (error) throw error
+      if (error) {
+        console.error("Error adding project:", error)
+        throw error
+      }
+
+      console.log("Project added successfully:", data)
 
       setNewProject({
         name: "",
@@ -991,6 +1206,7 @@ export function AdminPanel() {
       showNotification("success", `${newProject.name} has been successfully added.`)
       fetchProjects()
     } catch (error: any) {
+      console.error("Add project error details:", error)
       showNotification("error", `There was a problem adding the project: ${error.message}`)
     } finally {
       setIsSubmitting(false)
@@ -1066,7 +1282,7 @@ export function AdminPanel() {
       })
 
       showNotification("success", `${newSlide.title} slide has been successfully added.`)
-      // fetchSlides(); // Assuming you have a fetchSlides function
+      fetchSlides()
     } catch (error: any) {
       showNotification("error", `There was a problem adding the slide: ${error.message}`)
     } finally {
@@ -1152,14 +1368,223 @@ export function AdminPanel() {
   // Delete Logo
   const handleDeleteLogo = async (id: string) => {
     try {
+      setIsSubmitting(true)
+      console.log("Deleting logo with ID:", id)
       const { error } = await supabase.from("client_logos").delete().eq("id", id)
 
       if (error) throw error
 
+      // Update the local state to remove the deleted logo
+      setClientLogos((prevLogos) => prevLogos.filter((logo) => logo.id !== id))
+      setLogoOrder((prevOrder) => prevOrder.filter((logoId) => logoId !== id))
+
       showNotification("success", "The client logo has been successfully removed.")
-      fetchLogos()
     } catch (error: any) {
+      console.error("Logo deletion error:", error)
       showNotification("error", `There was a problem deleting the logo: ${error.message}`)
+    } finally {
+      setIsSubmitting(false)
+      setLogoToDelete(null)
+    }
+  }
+
+  // Handle edit slide click
+  const handleEditClick = (slide: HeroSlide) => {
+    setEditingSlide(slide)
+    setIsEditDialogOpen(true)
+  }
+
+  // Handle delete slide click
+  const handleDeleteClick = (slideId: string) => {
+    setSlideIdToDelete(slideId)
+    setIsDeleteDialogOpen(true)
+  }
+
+  // Handle save edit
+  const handleSaveEdit = async () => {
+    if (!editingSlide) return
+
+    try {
+      setIsSubmitting(true)
+
+      const { error } = await supabase
+        .from("hero_slides")
+        .update({
+          title: editingSlide.title,
+          description: editingSlide.description,
+          image: editingSlide.image,
+        })
+        .eq("id", editingSlide.id)
+
+      if (error) throw error
+
+      showNotification("success", "Slide updated successfully!")
+      fetchSlides()
+      setIsEditDialogOpen(false)
+      setEditingSlide(null)
+    } catch (error: any) {
+      showNotification("error", `Failed to update slide: ${error.message}`)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Handle confirm delete
+  const handleConfirmDelete = async () => {
+    if (!slideIdToDelete) return
+
+    try {
+      setIsSubmitting(true)
+
+      const { error } = await supabase.from("hero_slides").delete().eq("id", slideIdToDelete)
+
+      if (error) throw error
+
+      showNotification("success", "Slide deleted successfully!")
+      fetchSlides()
+      setIsDeleteDialogOpen(false)
+      setSlideIdToDelete(null)
+    } catch (error: any) {
+      showNotification("error", `Failed to delete slide: ${error.message}`)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Save Page Hero
+  const handleSavePageHero = async () => {
+    if (!heroToEdit) return
+
+    try {
+      setIsSubmitting(true)
+
+      // Ensure selectedPageHero is properly formatted
+      const formattedPageHero = Array.isArray(selectedPageHero) ? selectedPageHero : [selectedPageHero]
+
+      // Check if a hero exists for this page by querying the database
+      const { data: existingHeroes, error: fetchError } = await supabase
+        .from("page_heroes")
+        .select("*")
+        .eq("page", formattedPageHero) // Ensure correct array format
+
+      if (fetchError) throw fetchError
+
+      const existingHero = existingHeroes?.length ? existingHeroes[0] : null
+      let result
+
+      if (existingHero) {
+        // Update existing record
+        result = await supabase
+          .from("page_heroes")
+          .update({
+            title: heroToEdit.title,
+            subtitle: heroToEdit.subtitle,
+            image: heroToEdit.image,
+            video: heroToEdit.video,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingHero.id)
+      } else {
+        // Insert new record
+        result = await supabase.from("page_heroes").insert({
+          page: formattedPageHero, // Ensure correct format
+          title: heroToEdit.title,
+          subtitle: heroToEdit.subtitle,
+          image: heroToEdit.image,
+          video: heroToEdit.video,
+          created_at: new Date().toISOString(),
+        })
+      }
+
+      if (result.error) throw result.error
+
+      showNotification("success", "Page hero updated successfully!")
+      fetchPageHeroes()
+      setHeroToEdit(null)
+    } catch (error: any) {
+      console.error("Save Page Hero Error:", error)
+      showNotification("error", `Failed to save page hero: ${error.message}`)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Fetch Site Settings
+  const fetchSiteSettings = async () => {
+    if (!user) return
+
+    try {
+      setIsLoadingSiteSettings(true)
+      console.log("Fetching site settings...")
+
+      const { data, error } = await supabase.from("site_settings").select("*")
+
+      if (error) {
+        console.error("Error fetching site settings:", error)
+        throw error
+      }
+
+      console.log("Site settings fetched successfully:", data)
+
+      if (data) {
+        setSiteSettings(data)
+      }
+    } catch (error: any) {
+      console.error("Site settings fetch error details:", error)
+      showNotification("error", `There was a problem loading the site settings: ${error.message}`)
+    } finally {
+      setIsLoadingSiteSettings(false)
+    }
+  }
+
+  // Update Site Setting
+  const updateSiteSetting = async (key: string, value: string) => {
+    try {
+      setIsSubmitting(true)
+      console.log(`Updating site setting for key "${key}" with value:`, value)
+
+      // Check if the setting already exists
+      const { data: existingSettings, error: fetchError } = await supabase
+        .from("site_settings")
+        .select("*")
+        .eq("key", key)
+
+      if (fetchError) {
+        console.error("Error fetching existing site settings:", fetchError)
+        throw fetchError
+      }
+
+      if (existingSettings && existingSettings.length > 0) {
+        // Update existing setting
+        const { error: updateError } = await supabase.from("site_settings").update({ value }).eq("key", key)
+
+        if (updateError) {
+          console.error("Error updating site setting:", updateError)
+          throw updateError
+        }
+
+        console.log(`Site setting "${key}" updated successfully.`)
+        showNotification("success", `Setting "${key}" updated successfully!`)
+      } else {
+        // Insert new setting
+        const { error: insertError } = await supabase.from("site_settings").insert([{ key, value }])
+
+        if (insertError) {
+          console.error("Error inserting site setting:", insertError)
+          throw insertError
+        }
+
+        console.log(`Site setting "${key}" inserted successfully.`)
+        showNotification("success", `Setting "${key}" inserted successfully!`)
+      }
+
+      // Refresh site settings
+      fetchSiteSettings()
+    } catch (error: any) {
+      console.error("Update site setting error details:", error)
+      showNotification("error", `There was a problem updating the setting: ${error.message}`)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -1327,15 +1752,41 @@ export function AdminPanel() {
                     </svg>
                     Hero Slides
                   </TabsTrigger>
+                  <TabsTrigger value="site-settings" className="gap-1.5">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="lucide lucide-settings"
+                    >
+                      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    Site Settings
+                  </TabsTrigger>
                 </TabsList>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={activeTab === "projects" ? fetchProjects : fetchLogos}
-                    disabled={isRefreshing}
+                    onClick={
+                      activeTab === "projects"
+                        ? fetchProjects
+                        : activeTab === "logos"
+                          ? fetchLogos
+                          : activeTab === "site-settings"
+                            ? fetchSiteSettings
+                            : fetchSlides
+                    }
+                    disabled={isRefreshing || isLoadingSiteSettings}
                   >
-                    <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                    <RefreshCw className={`h-4 w-4 ${isRefreshing || isLoadingSiteSettings ? "animate-spin" : ""}`} />
                     <span className="sr-only">Refresh</span>
                   </Button>
                   <Dialog>
@@ -2225,7 +2676,10 @@ export function AdminPanel() {
                                     isSelected={selectedLogo?.id === logo.id}
                                     onSelect={() => setSelectedLogo(logo)}
                                     onEdit={() => setLogoToEdit({ ...logo })}
-                                    onDelete={() => setLogoToDelete(logo)}
+                                    onDelete={() => {
+                                      setLogoToDelete(logo)
+                                      setSelectedLogo(logo)
+                                    }}
                                   />
                                 ))}
                               </AnimatePresence>
@@ -2413,8 +2867,8 @@ export function AdminPanel() {
                                     <AlertDialogAction
                                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                       onClick={() => {
-                                        if (logoToDelete) {
-                                          handleDeleteLogo(logoToDelete.id)
+                                        if (selectedLogo) {
+                                          handleDeleteLogo(selectedLogo.id)
                                           setSelectedLogo(null)
                                         }
                                       }}
@@ -2446,7 +2900,10 @@ export function AdminPanel() {
                                 <path d="M18 12.5V10a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v1.4" />
                                 <path d="M14 11V9a2 2 0 1 0-4 0v2" />
                                 <path d="M10 10.5V5a2 2 0 1 0-4 0v9" />
-                                <path d="m7 15-1.76-1.76a2 2 0 0 0-2.83 2.82l3.6 3.6C7.5 21.14 9.2 22 12 22h2a8 8 0 0 0 8-8V7a2 2 0 1 0-4 0v5" />
+                                <path
+                                  d="m7 15-1.76-1.76a2 2 0 0 0-2.83 2.82l3.6 3.6C7.5 21.14 9.2 22 12
+ 22h2a8 8 0 0 0 8-8V7a2 2 0 1 0-4 0v5"
+                                />
                               </svg>
                             </div>
                             <h3 className="text-lg font-medium mb-2">Select a logo to preview</h3>
@@ -2467,12 +2924,342 @@ export function AdminPanel() {
                 </div>
               </TabsContent>
               <TabsContent value="slides" className="mt-0">
-                <div>
-                  <h1 className="text-3xl font-bold tracking-tight">Hero Slides</h1>
-                  <p className="text-muted-foreground mt-1">Manage your hero slides</p>
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-lg font-semibold">Hero Slides</h2>
+                    <Button variant="outline" size="sm" onClick={fetchSlides} disabled={isRefreshing}>
+                      <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
+                      Refresh
+                    </Button>
+                  </div>
+
+                  {/* Slides Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {slides.length === 0 ? (
+                      <div className="md:col-span-3 text-center py-12 border rounded-lg bg-muted/20">
+                        <div className="mx-auto w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+                          <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <h3 className="text-lg font-medium mb-1">No hero slides found</h3>
+                        <p className="text-muted-foreground">Get started by adding your first hero slide.</p>
+                      </div>
+                    ) : (
+                      <>
+                        {slides.map((slide) => (
+                          <motion.div
+                            key={slide.id}
+                            className="bg-white dark:bg-card rounded-xl shadow-sm border overflow-hidden transition-all hover:shadow-md"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            whileHover={{ y: -4 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <div className="aspect-video relative overflow-hidden bg-muted">
+                              {slide.image ? (
+                                <img
+                                  src={slide.image || "/placeholder.svg"}
+                                  alt={slide.title}
+                                  className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                                  onError={(e) => {
+                                    ;(e.target as HTMLImageElement).src = "/placeholder.svg?height=200&width=400"
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <ImageIcon className="h-12 w-12 text-muted-foreground/50" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-4">
+                              <h3 className="font-semibold text-lg line-clamp-1">{slide.title}</h3>
+                              {slide.description && (
+                                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{slide.description}</p>
+                              )}
+                              <div className="flex justify-end items-center pt-2 mt-2 border-t">
+                                <div className="flex gap-1">
+                                  <Button variant="ghost" size="icon" onClick={() => handleEditClick(slide)}>
+                                    <Pencil className="h-4 w-4" />
+                                    <span className="sr-only">Edit</span>
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => handleDeleteClick(slide.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    <span className="sr-only">Delete</span>
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Edit Slide Dialog */}
+                <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Edit Slide</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="title" className="text-right">
+                          Title
+                        </Label>
+                        <Input
+                          id="title"
+                          value={editingSlide?.title || ""}
+                          onChange={(e) =>
+                            setEditingSlide((prev) => (prev ? { ...prev, title: e.target.value } : null))
+                          }
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="description" className="text-right">
+                          Description
+                        </Label>
+                        <Textarea
+                          id="description"
+                          value={editingSlide?.description || ""}
+                          onChange={(e) =>
+                            setEditingSlide((prev) => (prev ? { ...prev, description: e.target.value } : null))
+                          }
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="image" className="text-right">
+                          Image URL
+                        </Label>
+                        <Input
+                          id="image"
+                          value={editingSlide?.image || ""}
+                          onChange={(e) =>
+                            setEditingSlide((prev) => (prev ? { ...prev, image: e.target.value } : null))
+                          }
+                          className="col-span-3"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleSaveEdit}>Save changes</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Delete Confirmation Dialog */}
+                <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete the slide.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleConfirmDelete}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </TabsContent>
+
+              <TabsContent value="site-settings" className="mt-0">
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-lg font-semibold">Hero Images</h2>
+                    <Button variant="outline" size="sm" onClick={fetchSiteSettings} disabled={isLoadingSiteSettings}>
+                      <RefreshCw className={`h-4 w-4 mr-1 ${isLoadingSiteSettings ? "animate-spin" : ""}`} />
+                      Refresh
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[
+                     
+                      "about_hero_image",
+                      "projects_hero_image",
+                      "gallery_hero_image",
+                      "contact_hero_image",
+                    ].map((key) => {
+                      const setting = siteSettings.find((s) => s.key === key)
+                      const pageName = key.replace("_hero_image", "").replace("_", " ")
+
+                      return (
+                        <Card key={key} className="overflow-hidden">
+                          <CardHeader className="p-4 bg-muted/20">
+                            <h3 className="font-medium capitalize">{pageName} Page Hero</h3>
+                          </CardHeader>
+                          <CardContent className="p-4 space-y-4">
+                            <div className="aspect-video w-full overflow-hidden rounded-lg border bg-muted/20">
+                              {setting?.value ? (
+                                <img
+                                  src={setting.value || "/placeholder.svg"}
+                                  alt={`${pageName} hero`}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    ;(e.target as HTMLImageElement).src = "/placeholder.svg?height=200&width=400"
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <div className="text-center">
+                                    <ImageIcon className="h-10 w-10 text-muted-foreground/50 mx-auto mb-2" />
+                                    <p className="text-muted-foreground text-sm">No hero image set</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="outline" className="w-full">
+                                  <Upload className="h-4 w-4 mr-2" />
+                                  Update Hero Image
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-md">
+                                <DialogHeader>
+                                  <DialogTitle>Update {pageName} Hero Image</DialogTitle>
+                                  <DialogDescription>
+                                    Upload a new hero image or provide an image URL.
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                  <div className="grid gap-2">
+                                    <Label>Current Image</Label>
+                                    <div className="aspect-video w-full overflow-hidden rounded-lg border bg-muted/20">
+                                      {setting?.value ? (
+                                        <img
+                                          src={setting.value || "/placeholder.svg"}
+                                          alt={`${pageName} hero`}
+                                          className="w-full h-full object-cover"
+                                          onError={(e) => {
+                                            ;(e.target as HTMLImageElement).src =
+                                              "/placeholder.svg?height=200&width=400"
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                          <ImageIcon className="h-10 w-10 text-muted-foreground/50" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="grid gap-2">
+                                    <Label htmlFor={`${key}-url`}>Image URL</Label>
+                                    <Input
+                                      id={`${key}-url`}
+                                      placeholder="Enter image URL"
+                                      defaultValue={setting?.value || ""}
+                                    />
+                                  </div>
+
+                                  <div className="flex items-center">
+                                    <div className="h-px flex-1 bg-muted"></div>
+                                    <span className="px-2 text-xs text-muted-foreground">or</span>
+                                    <div className="h-px flex-1 bg-muted"></div>
+                                  </div>
+
+                                  <div className="grid gap-2">
+                                    <Label>Upload Image</Label>
+                                    <div
+                                      onClick={() => heroFileInputRef.current?.click()}
+                                      className="border-2 border-dashed rounded-md p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all hover:bg-muted/50 hover:border-primary/50"
+                                    >
+                                      <Upload className="h-8 w-8 text-muted-foreground" />
+                                      <p className="text-sm font-medium">Click to upload</p>
+                                      <p className="text-xs text-muted-foreground">SVG, PNG, JPG or GIF (max. 5MB)</p>
+                                    </div>
+                                    <input
+                                      type="file"
+                                      ref={heroFileInputRef}
+                                      className="hidden"
+                                      accept="image/*,.heic,.HEIC"
+                                      onChange={async (e) => {
+                                        const files = e.target.files
+                                        if (!files || files.length === 0) return
+
+                                        try {
+                                          setIsUploadingHero(true)
+                                          const file = files[0]
+
+                                          // Create a unique file name
+                                          const fileExt = file.name.split(".").pop()
+                                          const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
+                                          const filePath = `hero-images/${fileName}`
+
+                                          // Upload the file to Supabase Storage
+                                          const { error: uploadError } = await supabase.storage
+                                            .from("projects")
+                                            .upload(filePath, file)
+
+                                          if (uploadError) throw uploadError
+
+                                          // Get the public URL
+                                          const {
+                                            data: { publicUrl },
+                                          } = supabase.storage.from("projects").getPublicUrl(filePath)
+
+                                          // Update the input field with the new URL
+                                          const input = document.getElementById(`${key}-url`) as HTMLInputElement
+                                          if (input) input.value = publicUrl
+
+                                          showNotification("success", "Image uploaded successfully!")
+                                        } catch (error: any) {
+                                          showNotification("error", `Upload failed: ${error.message}`)
+                                        } finally {
+                                          setIsUploadingHero(false)
+                                          if (heroFileInputRef.current) {
+                                            heroFileInputRef.current.value = ""
+                                          }
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                                <DialogFooter>
+                                  <DialogClose asChild>
+                                    <Button variant="outline">Cancel</Button>
+                                  </DialogClose>
+                                  <Button
+                                    onClick={() => {
+                                      const input = document.getElementById(`${key}-url`) as HTMLInputElement
+                                      if (input) {
+                                        updateSiteSetting(key, input.value)
+                                      }
+                                    }}
+                                    disabled={isSubmitting}
+                                  >
+                                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Save Changes
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
                 </div>
               </TabsContent>
-              
             </Tabs>
           </CardContent>
           <CardFooter className="border-t bg-muted/10 flex flex-col sm:flex-row items-center justify-between gap-2 px-6 py-4">
@@ -2486,4 +3273,6 @@ export function AdminPanel() {
     </div>
   )
 }
+
+export { AdminPanel }
 

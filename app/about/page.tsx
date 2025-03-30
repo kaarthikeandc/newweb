@@ -1,21 +1,71 @@
-import Navbar from "@/components/navbar";
-import Footer from "@/components/footer";
-import { Button } from "@/components/ui/button";
-import { Award, Briefcase, Clock } from "lucide-react";
-import Link from "next/link";
+"use client"
+
+import { useState, useEffect } from "react"
+import Navbar from "@/components/navbar"
+import Footer from "@/components/footer"
+import { Button } from "@/components/ui/button"
+import { Award, Clock, Loader2 } from "lucide-react"
+import Link from "next/link"
+import { supabase } from "@/lib/supabaseClient"
+import LoadingAnimation from "@/components/loading-animation"
 
 export default function AboutPage() {
+  const [heroImage, setHeroImage] = useState<string>("")
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchHeroImage = async () => {
+      try {
+        setIsLoading(true)
+
+        // Fetch hero image from site_settings table
+        const { data, error } = await supabase
+          .from("site_settings")
+          .select("value")
+          .eq("key", "about_hero_image")
+          .single()
+
+        if (error) {
+          console.error("Error fetching hero image:", error)
+        } else if (data) {
+          setHeroImage(data.value)
+        }
+      } catch (error) {
+        console.error("Failed to fetch hero image:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchHeroImage()
+  }, [])
+
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
+       {isLoading ? (
+        <div className="flex justify-center items-center h-screen">
+          <LoadingAnimation /> {/* ✅ Using LoadingAnimation component */}
+        </div>
+      ) : (
+        <>
+          <Navbar />
 
       {/* Hero Section */}
       <section className="pt-24 lg:pt-32 relative">
         <div className="absolute inset-0 bg-black/50 z-10"></div>
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url('/night.jpg')" }}
-        ></div>
+        {isLoading ? (
+          <div className="absolute inset-0 bg-[#2A5D3C]/80 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-white" />
+          </div>
+        ) : (
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{
+              backgroundImage: heroImage ? `url('${heroImage}')` : "none",
+              backgroundColor: heroImage ? "transparent" : "#2A5D3C",
+            }}
+          ></div>
+        )}
         <div className="container mx-auto px-4 py-20 relative z-20 text-white">
           <div className="max-w-3xl">
             <h1 className="text-4xl md:text-5xl font-bold mb-6">About Us</h1>
@@ -46,8 +96,7 @@ export default function AboutPage() {
                 role: "Director",
                 qualification: "B.E (Civil), PGP ACM (Construction management from NICMAR - Pune)",
                 experience: "11+ Years",
-                quote:
-                  "Leads the company with innovative approaches to construction management and project execution.",
+                quote: "Leads the company with innovative approaches to construction management and project execution.",
               },
               {
                 initials: "SV",
@@ -127,6 +176,9 @@ export default function AboutPage() {
       </section>
 
       <Footer />
+      </>
+  )}
     </div>
-  );
+  )
 }
+

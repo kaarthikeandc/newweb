@@ -9,6 +9,7 @@ import { Search, ZoomIn, X, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import Image from "next/image"
 import { supabase } from "@/lib/supabaseClient"
+import LoadingAnimation from "@/components/loading-animation"
 
 // Project type definition
 type Project = {
@@ -33,12 +34,26 @@ export default function GalleryPage() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [visibleCount, setVisibleCount] = useState(12)
   const [error, setError] = useState<string | null>(null)
+  const [heroImage, setHeroImage] = useState<string>("")
 
   // Fetch projects from Supabase
   useEffect(() => {
     const fetchProjects = async () => {
       try {
         setIsLoading(true)
+
+        // Fetch hero image
+        const { data: heroData, error: heroError } = await supabase
+          .from("site_settings")
+          .select("value")
+          .eq("key", "gallery_hero_image")
+          .single()
+
+        if (heroData && !heroError) {
+          setHeroImage(heroData.value)
+        }
+
+        // Existing project fetch code
         const { data, error } = await supabase.from("projects").select("*").order("created_at", { ascending: false })
 
         if (error) {
@@ -65,7 +80,7 @@ export default function GalleryPage() {
           setProjects(processedData)
         }
       } catch (error: any) {
-        console.error("Error fetching projects:", error.message)
+        console.error("Error fetching data:", error.message)
         setError("Failed to load projects. Please try again later.")
       } finally {
         setIsLoading(false)
@@ -117,12 +132,26 @@ export default function GalleryPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
+      {isLoading ? (
+        <div className="flex justify-center items-center h-screen">
+          <LoadingAnimation /> {/* ✅ Using LoadingAnimation component */}
+        </div>
+      ) : (
+        <>
+          <Navbar />
+
+     
 
       {/* Hero Section */}
       <section className="pt-16 lg:pt-24 relative">
         <div className="absolute inset-0 bg-black/60 z-10"></div>
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/beat.jpg')" }}></div>
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{
+            backgroundImage: heroImage ? `url('${heroImage}')` : "none",
+            backgroundColor: heroImage ? "transparent" : "#2A5D3C",
+          }}
+        ></div>
         <div className="container mx-auto px-4 py-12 md:py-20 relative z-20 text-white">
           <div className="max-w-3xl">
             <h1 className="text-3xl md:text-5xl font-bold mb-4 md:mb-6">Project Gallery</h1>
@@ -204,12 +233,18 @@ export default function GalleryPage() {
                   onClick={() => openModal(project, 0)}
                 >
                   <div className="relative h-52 sm:h-64 overflow-hidden">
-                    <Image
-                      src={project.images && project.images[0] ? project.images[0] : "/placeholder.svg"}
-                      alt={project.name}
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-110"
-                    />
+                    {project.images && project.images[0] ? (
+                      <Image
+                        src={project.images[0] || "/placeholder.svg"}
+                        alt={project.name}
+                        fill
+                        className="object-cover transition-transform duration-500 group-hover:scale-110"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                        <span className="text-gray-400 text-sm">No image</span>
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <div className="bg-white/90 rounded-full p-2 sm:p-3">
                         <ZoomIn className="h-5 w-5 sm:h-6 sm:w-6 text-[#2A5D3C]" />
@@ -257,12 +292,18 @@ export default function GalleryPage() {
             </button>
 
             <div className="relative h-[50vh] sm:h-[60vh] md:h-[70vh]">
-              <Image
-                src={selectedProject.images[selectedImageIndex] || "/placeholder.svg"}
-                alt={`${selectedProject.name} - Image ${selectedImageIndex + 1}`}
-                fill
-                className="object-contain"
-              />
+              {selectedProject.images[selectedImageIndex] ? (
+                <Image
+                  src={selectedProject.images[selectedImageIndex] || "/placeholder.svg"}
+                  alt={`${selectedProject.name} - Image ${selectedImageIndex + 1}`}
+                  fill
+                  className="object-contain"
+                />
+              ) : (
+                <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                  <span className="text-gray-400">No image available</span>
+                </div>
+              )}
 
               {selectedProject.images.length > 1 && (
                 <>
@@ -329,12 +370,18 @@ export default function GalleryPage() {
                         setSelectedImageIndex(idx)
                       }}
                     >
-                      <Image
-                        src={img || "/placeholder.svg"}
-                        alt={`Thumbnail ${idx + 1}`}
-                        fill
-                        className="object-cover"
-                      />
+                      {img ? (
+                        <Image
+                          src={img || "/placeholder.svg"}
+                          alt={`Thumbnail ${idx + 1}`}
+                          fill
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                          <span className="text-gray-400 text-xs">Empty</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -343,9 +390,12 @@ export default function GalleryPage() {
           </div>
         </div>
       )}
-
+      
       <Footer />
+      </>
+      )}
     </div>
+    
   )
 }
 

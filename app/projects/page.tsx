@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import Navbar from "@/components/navbar"
 import Footer from "@/components/footer"
 import { supabase } from "@/lib/supabaseClient"
+import LoadingAnimation from "@/components/loading-animation"
 
 interface Project {
   id: string
@@ -63,10 +64,12 @@ function ProjectsFilter({
   categories,
   activeTab,
   isMobile = false,
+  onTabChange,
 }: {
   categories: string[]
   activeTab: string
   isMobile?: boolean
+  onTabChange?: (tab: string) => void
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -96,21 +99,16 @@ function ProjectsFilter({
   )
 
   const handleTabChange = (value: string) => {
-    // Preserve existing query parameters like search
-    const queryString = createQueryString("category", value)
-
-    // Use replace instead of push to avoid adding to history stack
-    router.replace(`${pathname}${queryString ? `?${queryString}` : ""}`, { scroll: false })
-
-    if (value !== "all") {
-      window.history.replaceState(null, "", `#${value}`)
-    } else {
-      window.history.replaceState(null, "", pathname)
+    // Don't update the URL, just handle the state locally
+    // The parent component should handle this state
+    if (typeof onTabChange === "function") {
+      onTabChange(value)
     }
   }
 
   if (isMobile) {
     return (
+      
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" className="w-full flex justify-between items-center">
@@ -309,17 +307,31 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
               onClick={(e) => openProjectModal(project, e)}
             >
               <div className="relative h-52 sm:h-64 overflow-hidden">
-                <Image
-                  src={projectImages[0] || "/placeholder.svg"}
-                  alt={project.name || project.title || "Project"}
-                  fill
-                  className="object-cover transition-transform duration-500 group-hover:scale-105"
-                  priority
-                  unoptimized={projectImages[0]?.startsWith("http")}
-                  onError={(e) => {
-                    ;(e.target as HTMLImageElement).src = "/placeholder.svg"
-                  }}
-                />
+                {projectImages[0] ? (
+                  <Image
+                    src={projectImages[0] || "/placeholder.svg"}
+                    alt={project.name || project.title || "Project"}
+                    fill
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
+                    priority
+                    unoptimized={projectImages[0]?.startsWith("http")}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement
+                      target.style.display = "none"
+                      const parent = target.parentElement
+                      if (parent) {
+                        const placeholder = document.createElement("div")
+                        placeholder.className = "w-full h-full bg-gray-100 flex items-center justify-center"
+                        placeholder.innerHTML = "<span class='text-gray-400 text-sm'>No image</span>"
+                        parent.appendChild(placeholder)
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                    <span className="text-gray-400 text-sm">No image</span>
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
                 <div className="absolute bottom-0 left-0 p-4 text-white">
                   <Badge className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white border-none capitalize">
@@ -372,16 +384,30 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                     <span className="sr-only">Close</span>
                   </Button>
 
-                  <Image
-                    src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
-                    alt={selectedProject.name || selectedProject.title || "Project image"}
-                    fill
-                    className="object-contain"
-                    unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
-                    onError={(e) => {
-                      ;(e.target as HTMLImageElement).src = "/placeholder.svg"
-                    }}
-                  />
+                  {getProjectImages(selectedProject)[currentImageIndex] ? (
+                    <Image
+                      src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
+                      alt={selectedProject.name || selectedProject.title || "Project image"}
+                      fill
+                      className="object-contain"
+                      unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        target.style.display = "none"
+                        const parent = target.parentElement
+                        if (parent) {
+                          const placeholder = document.createElement("div")
+                          placeholder.className = "w-full h-full bg-gray-800 flex items-center justify-center"
+                          placeholder.innerHTML = "<span class='text-gray-400'>No image available</span>"
+                          parent.appendChild(placeholder)
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+                      <span className="text-gray-400">No image available</span>
+                    </div>
+                  )}
 
                   {getProjectImages(selectedProject).length > 1 && (
                     <>
@@ -481,8 +507,30 @@ export default function ProjectsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState(searchParams?.get("q") || "")
-  const activeTab = searchParams?.get("category") || "all"
+  const [activeTabState, setActiveTabState] = useState(searchParams?.get("category") || "all")
+  const activeTab = activeTabState
   const [isMobile, setIsMobile] = useState(false)
+  const [heroImage, setHeroImage] = useState<string>("")
+
+  useEffect(() => {
+    const fetchHeroImage = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("site_settings")
+          .select("value")
+          .eq("key", "projects_hero_image")
+          .single()
+
+        if (data && !error) {
+          setHeroImage(data.value)
+        }
+      } catch (error) {
+        console.error("Error fetching hero image:", error)
+      }
+    }
+
+    fetchHeroImage()
+  }, [])
 
   useEffect(() => {
     const checkMobile = () => {
@@ -516,13 +564,11 @@ export default function ProjectsPage() {
               images = project.images
             } else if (project.image) {
               images = Array.isArray(project.image) ? project.image : [project.image]
-            } else {
-              images = ["/placeholder.svg"]
             }
 
             return {
               ...project,
-              image: images[0], // Keep first image in image field for backward compatibility
+              image: images[0] || "", // Keep first image in image field for backward compatibility
               images, // Store all images in images array
             }
           })
@@ -553,11 +599,23 @@ export default function ProjectsPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
+      {isLoading ? (
+        <div className="flex justify-center items-center h-screen">
+          <LoadingAnimation /> {/* ✅ Using LoadingAnimation component */}
+        </div>
+      ) : (
+        <>
+          <Navbar />
 
       <section className="pt-16 lg:pt-24 relative">
         <div className="absolute inset-0 bg-black/60 z-10"></div>
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/black.jpg')" }}></div>
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{
+            backgroundImage: heroImage ? `url('${heroImage}')` : "none",
+            backgroundColor: heroImage ? "transparent" : "#2A5D3C",
+          }}
+        ></div>
         <div className="container mx-auto px-4 py-12 md:py-20 relative z-20 text-white">
           <div className="max-w-3xl">
             <h1 className="text-3xl md:text-5xl font-bold mb-4 md:mb-6">Our Projects</h1>
@@ -576,11 +634,16 @@ export default function ProjectsPage() {
             ) : isMobile ? (
               <div className="w-full flex gap-4">
                 <ProjectsSearch initialQuery={searchQuery} onSearch={handleSearch} />
-                <ProjectsFilter categories={categories} activeTab={activeTab} isMobile={true} />
+                <ProjectsFilter
+                  categories={categories}
+                  activeTab={activeTab}
+                  isMobile={true}
+                  onTabChange={setActiveTabState}
+                />
               </div>
             ) : (
               <>
-                <ProjectsFilter categories={categories} activeTab={activeTab} />
+                <ProjectsFilter categories={categories} activeTab={activeTab} onTabChange={setActiveTabState} />
                 <ProjectsSearch initialQuery={searchQuery} onSearch={handleSearch} />
               </>
             )}
@@ -642,11 +705,12 @@ export default function ProjectsPage() {
             <Button size="lg" className="bg-white text-[#2A5D3C] hover:bg-gray-100">
               <Link href="/contact">Contact Us</Link>
             </Button>
-           
           </div>
         </div>
       </section>
       <Footer />
+      </>
+  )}
     </div>
   )
 }

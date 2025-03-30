@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Navbar from "@/components/navbar"
 import Footer from "@/components/footer"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Mail, Phone, MapPin, Clock, CheckCircle } from "lucide-react"
 import Link from "next/link"
+import { supabase } from "@/lib/supabaseClient"
+
 
 export default function ContactPage() {
   const [formState, setFormState] = useState({
@@ -25,6 +27,32 @@ export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [heroImage, setHeroImage] = useState<string>("/image2.jpg")
+
+  useEffect(() => {
+    const fetchHeroImage = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("site_settings")
+          .select("value")
+          .eq("key", "contact_hero_image")
+          .single()
+
+        if (data && !error) {
+          setHeroImage(data.value)
+        } else {
+          // If no image found, set to empty string
+          setHeroImage("")
+        }
+      } catch (error) {
+        console.error("Error fetching hero image:", error)
+        // If error occurs, set to empty string
+        setHeroImage("")
+      }
+    }
+
+    fetchHeroImage()
+  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -100,7 +128,10 @@ export default function ContactPage() {
       {/* Hero Section */}
       <section className="pt-24 lg:pt-32 relative">
         <div className="absolute inset-0 bg-black/50 z-10"></div>
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/image2.jpg')" }}></div>
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: heroImage ? `url('${heroImage}')` : "none" }}
+        ></div>
         <div className="container mx-auto px-4 py-20 relative z-20 text-white">
           <div className="max-w-3xl">
             <h1 className="text-4xl md:text-5xl font-bold mb-6">Contact Us</h1>
@@ -323,13 +354,12 @@ export default function ContactPage() {
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6">Discover Our Projects Today!</h2>
           <p className="text-xl text-gray-200 mb-8 max-w-3xl mx-auto">
-          Explore our projects and see how we can bring your vision to life.
+            Explore our projects and see how we can bring your vision to life.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Button size="lg" className="bg-white text-[#2A5D3C] hover:bg-gray-100">
               <Link href="/projects">View Our Projects</Link>
             </Button>
-          
           </div>
         </div>
       </section>
