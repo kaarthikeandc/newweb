@@ -17,7 +17,18 @@ import Navbar from "@/components/navbar"
 import Footer from "@/components/footer"
 import { supabase } from "@/lib/supabaseClient"
 import LoadingAnimation from "@/components/loading-animation"
-
+interface Project {
+  id: string
+  name?: string
+  title?: string
+  description?: string
+  location?: string
+  client?: string
+  category: string
+  image?: string
+  images?: string[]
+  created_at?: string
+}
 function ProjectsFilter({
   categories,
   activeTab,
