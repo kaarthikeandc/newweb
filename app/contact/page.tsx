@@ -318,12 +318,7 @@ export default function ContactPage() {
                   </div>
                 </div>
 
-                <div className="flex items-start space-x-4">
-                  <div className="bg-[#3D8361]/10 rounded-full p-3 mt-1">
-                    <Clock className="h-6 w-6 text-[#3D8361]" />
-                  </div>
-                  
-                </div>
+               
               </div>
 
               
