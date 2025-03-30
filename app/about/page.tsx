@@ -82,9 +82,7 @@ export default function AboutPage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">Our Leadership Team</h2>
-            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-              Meet the experienced professionals who lead K Engineering & Construction with vision and expertise.
-            </p>
+           
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -96,7 +94,7 @@ export default function AboutPage() {
                 role: "Director",
                 qualification: "B.E (Civil), PGP ACM (Construction management from NICMAR - Pune)",
                 experience: "11+ Years",
-                quote: "Leads the company with innovative approaches to construction management and project execution.",
+                //quote: "Leads the company with innovative approaches to construction management and project execution.",
               },
               {
                 initials: "SV",
@@ -104,8 +102,8 @@ export default function AboutPage() {
                 role: "Technical Director",
                 qualification: "B.E (Civil)",
                 experience: "30+ Years",
-                quote:
-                  "Brings extensive technical expertise and industry knowledge to ensure project quality and compliance.",
+                //quote:
+                //  "Brings extensive technical expertise and industry knowledge to ensure project quality and compliance.",
               },
               {
                 initials: "KM",
@@ -113,8 +111,7 @@ export default function AboutPage() {
                 role: "Operations Director",
                 qualification: "Oversees all project operations and resource management",
                 experience: "35+ Years",
-                quote:
-                  "Oversees project operations with a focus on efficiency, timely delivery, and resource optimization.",
+             //
               },
             ].map((leader, index) => (
               <div
