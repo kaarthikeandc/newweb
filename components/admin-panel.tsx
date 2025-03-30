@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { UploadIcon } from "lucide-react"; // or from your icon library
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import {
   Dialog,
@@ -817,6 +818,7 @@ const AdminPanel = () => {
 
   // Handle Image Upload
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    
     const files = event.target.files
     if (!files || files.length === 0) return
 
@@ -858,7 +860,11 @@ const AdminPanel = () => {
             continue // Skip this file and move to the next one
           }
         }
-
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setEditingSlide((prev) => (prev ? { ...prev, image: e.target.result } : null));
+        };
+        reader.readAsDataURL(file);
         // Create a unique file name
         const fileExt = file.name.split(".").pop()
         const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
@@ -3003,59 +3009,143 @@ const AdminPanel = () => {
 
                 {/* Edit Slide Dialog */}
                 <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Edit Slide</DialogTitle>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="title" className="text-right">
-                          Title
-                        </Label>
-                        <Input
-                          id="title"
-                          value={editingSlide?.title || ""}
-                          onChange={(e) =>
-                            setEditingSlide((prev) => (prev ? { ...prev, title: e.target.value } : null))
-                          }
-                          className="col-span-3"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="description" className="text-right">
-                          Description
-                        </Label>
-                        <Textarea
-                          id="description"
-                          value={editingSlide?.description || ""}
-                          onChange={(e) =>
-                            setEditingSlide((prev) => (prev ? { ...prev, description: e.target.value } : null))
-                          }
-                          className="col-span-3"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="image" className="text-right">
-                          Image URL
-                        </Label>
-                        <Input
-                          id="image"
-                          value={editingSlide?.image || ""}
-                          onChange={(e) =>
-                            setEditingSlide((prev) => (prev ? { ...prev, image: e.target.value } : null))
-                          }
-                          className="col-span-3"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleSaveEdit}>Save changes</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+  <DialogContent className="sm:max-w-[425px]">
+    <DialogHeader>
+      <DialogTitle>Edit Slide</DialogTitle>
+    </DialogHeader>
+    <div className="grid gap-4 py-4">
+      {/* Title and Description fields remain the same */}
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="title" className="text-right">
+          Title
+        </Label>
+        <Input
+          id="title"
+          value={editingSlide?.title || ""}
+          onChange={(e) =>
+            setEditingSlide((prev) => (prev ? { ...prev, title: e.target.value } : null))
+          }
+          className="col-span-3"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="description" className="text-right">
+          Description
+        </Label>
+        <Textarea
+          id="description"
+          value={editingSlide?.description || ""}
+          onChange={(e) =>
+            setEditingSlide((prev) => (prev ? { ...prev, description: e.target.value } : null))
+          }
+          className="col-span-3"
+        />
+      </div>
+
+      {/* Enhanced Drag and Drop Image Uploader */}
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="image" className="text-right">
+          Image
+        </Label>
+        <div className="col-span-3">
+          <div 
+            className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-6 cursor-pointer hover:bg-gray-50 transition-colors ${isUploading ? 'opacity-70 pointer-events-none' : ''}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.currentTarget.classList.add("border-primary", "bg-gray-50");
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              e.currentTarget.classList.remove("border-primary", "bg-gray-50");
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.currentTarget.classList.remove("border-primary", "bg-gray-50");
+              if (isUploading) return;
+              
+              const files = e.dataTransfer.files;
+              if (files.length > 0) {
+                // Create a synthetic event to reuse your handleImageUpload
+                const syntheticEvent = {
+                  target: {
+                    files: files
+                  }
+                } as React.ChangeEvent<HTMLInputElement>;
+                handleImageUpload(syntheticEvent);
+              }
+            }}
+            onClick={() => !isUploading && document.getElementById("file-upload")?.click()}
+          >
+            <input
+              id="file-upload"
+              type="file"
+              accept="image/*,.heic"
+              className="hidden"
+              onChange={handleImageUpload}
+              disabled={isUploading}
+              multiple={false} // Set to true if you want multiple files
+            />
+            
+            {isUploading ? (
+              <div className="flex flex-col items-center">
+                <Loader2 className="h-8 w-8 mb-2 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Uploading image...</p>
+              </div>
+            ) : editingSlide?.image ? (
+              <>
+                <img 
+                  src={editingSlide.image} 
+                  alt="Preview" 
+                  className="max-h-40 mb-2 rounded-md object-cover"
+                />
+                <p className="text-sm text-muted-foreground">Click or drag to replace</p>
+              </>
+            ) : (
+              <>
+                <UploadIcon className="h-8 w-8 mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-medium text-primary">Click to upload</span> or drag and drop
+                </p>
+                <p className="text-xs text-muted-foreground">Supports: JPG, PNG, GIF, HEIC</p>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Optional URL fallback */}
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="image-url" className="text-right">
+          Or Image URL
+        </Label>
+        <Input
+          id="image-url"
+          value={editingSlide?.image || ""}
+          onChange={(e) =>
+            setEditingSlide((prev) => (prev ? { ...prev, image: e.target.value } : null))
+          }
+          className="col-span-3"
+          placeholder="Paste image URL here"
+        />
+      </div>
+    </div>
+    <DialogFooter>
+      <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+        Cancel
+      </Button>
+      <Button onClick={handleSaveEdit} disabled={isUploading}>
+        {isUploading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Saving...
+          </>
+        ) : (
+          "Save changes"
+        )}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
 
                 {/* Delete Confirmation Dialog */}
                 <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
