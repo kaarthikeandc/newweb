@@ -314,23 +314,7 @@ export default function HomePage() {
                 <div className="max-w-3xl">
                   <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">{slide.title}</h1>
                   <p className="text-lg md:text-xl mb-8 text-gray-100 max-w-2xl">{slide.description}</p>
-                  <div className="flex flex-wrap gap-4 relative z-50">
-                    <Link href="/projects" passHref>
-                      <Button asChild size="lg" className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white">
-                        <span>Our Projects</span>
-                      </Button>
-                    </Link>
-                    <Link href="/contact" passHref>
-                      <Button
-                        asChild
-                        size="lg"
-                        variant="outline"
-                        className="bg-transparent text-white border-white hover:bg-white/10"
-                      >
-                        <span>Contact Us</span>
-                      </Button>
-                    </Link>
-                  </div>
+                 
                 </div>
               </div>
             </div>
@@ -383,10 +367,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">Our Services</h2>
-            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-              We provide comprehensive construction services across various sectors, delivering quality and excellence
-              in every project.
-            </p>
+          
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -400,9 +381,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">Featured Projects</h2>
-            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-              Explore some of our most notable projects that showcase our expertise and commitment to excellence.
-            </p>
+           
           </div>
 
           {isLoading ? (
@@ -439,10 +418,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">Our Clients</h2>
-            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-              We're proud to collaborate with these industry-leading companies who trust us with their construction
-              needs.
-            </p>
+          
           </div>
 
           {clientLogos.length > 0 ? (
@@ -476,9 +452,7 @@ export default function HomePage() {
       <section className="py-16 md:py-24 bg-[#2A5D3C] text-white">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Start Your Project?</h2>
-          <p className="text-xl text-gray-200 mb-8 max-w-3xl mx-auto">
-            Contact us today to discuss your construction needs and how we can bring your vision to life.
-          </p>
+         
           <div className="flex flex-wrap justify-center gap-4">
             <Button asChild size="lg" className="bg-white text-[#2A5D3C] hover:bg-gray-100">
               <Link href="/contact">Contact Us</Link>
