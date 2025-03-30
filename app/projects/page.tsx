@@ -71,54 +71,22 @@ function ProjectsFilter({
   isMobile?: boolean
   onTabChange?: (tab: string) => void
 }) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-
-  // This effect handles hash changes in the URL
-  useEffect(() => {
-    const hash = window.location.hash.replace("#", "")
-    if (hash && categories.includes(hash) && activeTab !== hash) {
-      const params = new URLSearchParams(searchParams.toString())
-      params.set("category", hash)
-      router.push(`${pathname}?${params.toString()}`)
-    }
-  }, [categories, activeTab, pathname, router, searchParams])
-
-  const createQueryString = useCallback(
-    (name: string, value: string) => {
-      const params = new URLSearchParams(searchParams.toString())
-      if (value === "all") {
-        params.delete(name)
-      } else {
-        params.set(name, value)
-      }
-      return params.toString()
-    },
-    [searchParams],
-  )
-
-  const handleTabChange = (value: string) => {
-    // Don't update the URL, just handle the state locally
-    // The parent component should handle this state
-    if (typeof onTabChange === "function") {
-      onTabChange(value)
-    }
+  const handleTabChange = (tab: string) => {
+    onTabChange?.(tab)
   }
 
   if (isMobile) {
     return (
-      
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="w-full flex justify-between items-center">
-            <span>
-              Filter: {activeTab === "all" ? "All Projects" : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+          <Button variant="outline" className="w-full md:w-auto flex justify-between items-center">
+            <span className="truncate">
+              {activeTab === "all" ? "All Projects" : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
             </span>
-            <Filter className="h-4 w-4 ml-2" />
+            <Filter className="h-4 w-4 ml-2 flex-shrink-0" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-[200px]">
+        <DropdownMenuContent align="end" className="w-[200px] max-h-[300px] overflow-y-auto">
           <DropdownMenuItem onSelect={() => handleTabChange("all")}>All Projects</DropdownMenuItem>
           {categories.map((category) => (
             <DropdownMenuItem key={category} onSelect={() => handleTabChange(category)}>
@@ -132,12 +100,17 @@ function ProjectsFilter({
 
   return (
     <Tabs defaultValue={activeTab} value={activeTab} onValueChange={handleTabChange} className="w-full max-w-3xl">
-      <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 w-full gap-1 h-auto">
-        <TabsTrigger value="all" className="px-2 py-1.5 h-auto text-sm">
+      <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 w-full gap-1 h-auto">
+        <TabsTrigger value="all" className="px-2 py-1.5 h-auto text-sm whitespace-nowrap">
           All
         </TabsTrigger>
         {categories.map((category) => (
-          <TabsTrigger key={category} value={category} id={category} className="px-2 py-1.5 h-auto text-sm">
+          <TabsTrigger 
+            key={category} 
+            value={category} 
+            id={category} 
+            className="px-2 py-1.5 h-auto text-sm whitespace-nowrap overflow-hidden text-ellipsis"
+          >
             {category.charAt(0).toUpperCase() + category.slice(1)}
           </TabsTrigger>
         ))}
@@ -147,56 +120,21 @@ function ProjectsFilter({
 }
 
 function ProjectsSearch({ initialQuery, onSearch }: { initialQuery: string; onSearch: (query: string) => void }) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState(initialQuery)
-  const [isPending, startTransition] = useTransition()
-
-  const createQueryString = useCallback(
-    (name: string, value: string) => {
-      const params = new URLSearchParams(searchParams.toString())
-      if (value) {
-        params.set(name, value)
-      } else {
-        params.delete(name)
-      }
-      return params.toString()
-    },
-    [searchParams],
-  )
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setSearchQuery(value)
-    onSearch(value)
-
-    startTransition(() => {
-      const params = new URLSearchParams(searchParams.toString())
-      if (value) {
-        params.set("q", value)
-      } else {
-        params.delete("q")
-      }
-      // Preserve the category parameter
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-    })
+    const query = e.target.value
+    setSearchQuery(query)
+    onSearch(query)
   }
 
   const clearSearch = () => {
     setSearchQuery("")
     onSearch("")
-
-    startTransition(() => {
-      const params = new URLSearchParams(searchParams.toString())
-      params.delete("q")
-      // Preserve the category parameter
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-    })
   }
 
   return (
-    <div className="relative w-full md:max-w-sm">
+    <div className="relative w-full md:w-64 lg:w-80">
       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
       <Input
         type="text"
@@ -215,15 +153,9 @@ function ProjectsSearch({ initialQuery, onSearch }: { initialQuery: string; onSe
           <X size={18} />
         </button>
       )}
-      {isPending && !searchQuery && (
-        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-          <div className="h-4 w-4 border-t-2 border-r-2 border-[#2A5D3C] rounded-full animate-spin"></div>
-        </div>
-      )}
     </div>
   )
 }
-
 function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQuery: string }) {
   const [filteredProjects, setFilteredProjects] = useState<Project[]>(projects)
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
