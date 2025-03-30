@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useCallback, useTransition } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import Link from "next/link"
@@ -18,47 +17,6 @@ import Navbar from "@/components/navbar"
 import Footer from "@/components/footer"
 import { supabase } from "@/lib/supabaseClient"
 import LoadingAnimation from "@/components/loading-animation"
-
-interface Project {
-  id: string
-  name?: string
-  title?: string
-  category: string
-  client: string
-  location: string
-  description: string
-  image: string | string[]
-  images?: string[]
-  created_at?: string
-}
-
-function getProjectImages(project: Project): string[] {
-  // First try to get images from the images array
-  if (project.images && project.images.length > 0) {
-    return project.images.map((img) =>
-      img.startsWith("http") || img.startsWith("/")
-        ? img
-        : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/projects/${img}`,
-    )
-  }
-
-  // Fallback to image field
-  const imageField = project.image
-  if (Array.isArray(imageField)) {
-    return imageField.map((img) =>
-      img.startsWith("http") || img.startsWith("/")
-        ? img
-        : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/projects/${img}`,
-    )
-  }
-
-  // Handle single image string
-  return [
-    imageField.startsWith("http") || imageField.startsWith("/")
-      ? imageField
-      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/projects/${imageField}`,
-  ]
-}
 
 function ProjectsFilter({
   categories,
@@ -156,33 +114,25 @@ function ProjectsSearch({ initialQuery, onSearch }: { initialQuery: string; onSe
     </div>
   )
 }
+
 function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQuery: string }) {
-  const [filteredProjects, setFilteredProjects] = useState<Project[]>(projects)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isImageLoading] = useState(true)
 
-  useEffect(() => {
-    if (!searchQuery) {
-      setFilteredProjects(projects)
-      return
-    }
+  const filteredProjects = projects.filter((project) =>
+    project.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    project.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    project.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    project.client?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
-    const query = searchQuery.toLowerCase()
-    const filtered = projects.filter((project) => {
-      return (
-        (project.name && project.name.toLowerCase().includes(query)) ||
-        (project.title && project.title.toLowerCase().includes(query)) ||
-        (project.description && project.description.toLowerCase().includes(query)) ||
-        (project.client && project.client.toLowerCase().includes(query)) ||
-        (project.location && project.location.toLowerCase().includes(query)) ||
-        (project.category && project.category.toLowerCase().includes(query))
-      )
-    })
-
-    setFilteredProjects(filtered)
-  }, [projects, searchQuery])
+  const getProjectImages = (project: Project) => {
+    const images = []
+    if (project.image) images.push(project.image)
+    if (project.images) images.push(...project.images)
+    return images
+  }
 
   const openProjectModal = (project: Project, e: React.MouseEvent) => {
     e.preventDefault()
@@ -193,42 +143,27 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
 
   const closeModal = () => {
     setIsModalOpen(false)
-    setTimeout(() => {
-      setSelectedProject(null)
-    }, 300) // Wait for animation to complete
+    setSelectedProject(null)
+    setCurrentImageIndex(0)
   }
 
-  const nextImage = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!selectedProject) return
-
-    const images = getProjectImages(selectedProject)
-    setCurrentImageIndex((prev) => (prev + 1) % images.length)
+  const nextImage = () => {
+    if (selectedProject) {
+      const images = getProjectImages(selectedProject)
+      setCurrentImageIndex((prev) => (prev + 1) % images.length)
+    }
   }
 
-  const prevImage = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!selectedProject) return
-
-    const images = getProjectImages(selectedProject)
-    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)
-  }
-
-  if (filteredProjects.length === 0) {
-    return (
-      <div className="text-center py-16 bg-gray-50 rounded-lg">
-        <h3 className="text-xl font-bold mb-2">No projects found</h3>
-        <p className="text-gray-600 mb-4">Try adjusting your search or filter criteria</p>
-        <Button variant="outline" asChild>
-          <Link href="/projects">Clear Filters</Link>
-        </Button>
-      </div>
-    )
+  const previousImage = () => {
+    if (selectedProject) {
+      const images = getProjectImages(selectedProject)
+      setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)
+    }
   }
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
         {filteredProjects.map((project) => {
           const projectImages = getProjectImages(project)
 
@@ -238,7 +173,7 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
               className="group overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-gray-200 hover:-translate-y-1"
               onClick={(e) => openProjectModal(project, e)}
             >
-              <div className="relative h-52 sm:h-64 overflow-hidden">
+              <div className="relative h-48 sm:h-52 md:h-64 overflow-hidden">
                 {projectImages[0] ? (
                   <Image
                     src={projectImages[0] || "/placeholder.svg"}
@@ -247,17 +182,6 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                     priority
                     unoptimized={projectImages[0]?.startsWith("http")}
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement
-                      target.style.display = "none"
-                      const parent = target.parentElement
-                      if (parent) {
-                        const placeholder = document.createElement("div")
-                        placeholder.className = "w-full h-full bg-gray-100 flex items-center justify-center"
-                        placeholder.innerHTML = "<span class='text-gray-400 text-sm'>No image</span>"
-                        parent.appendChild(placeholder)
-                      }
-                    }}
                   />
                 ) : (
                   <div className="w-full h-full bg-gray-100 flex items-center justify-center">
@@ -266,20 +190,20 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
                 <div className="absolute bottom-0 left-0 p-4 text-white">
-                  <Badge className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white border-none capitalize">
+                  <Badge className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white border-none capitalize text-xs sm:text-sm">
                     {project.category}
                   </Badge>
                 </div>
               </div>
-              <div className="p-4 sm:p-6">
-                <h3 className="text-lg sm:text-xl font-bold mb-2 text-gray-900 group-hover:text-[#3D8361] transition-colors">
+              <div className="p-3 sm:p-4 md:p-6">
+                <h3 className="text-base sm:text-lg md:text-xl font-bold mb-2 text-gray-900 group-hover:text-[#3D8361] transition-colors line-clamp-2">
                   {project.name || project.title}
                 </h3>
-                <div className="text-xs sm:text-sm text-gray-500 mb-2 sm:mb-3">
-                  <p>{project.location}</p>
-                  <p>Client: {project.client}</p>
+                <div className="text-xs sm:text-sm text-gray-500 mb-2">
+                  <p className="truncate">{project.location}</p>
+                  <p className="truncate">Client: {project.client}</p>
                 </div>
-                <p className="text-sm text-gray-600 mb-3 sm:mb-4 line-clamp-2">{project.description}</p>
+                <p className="text-xs sm:text-sm text-gray-600 mb-3 line-clamp-2">{project.description}</p>
                 <button
                   className="text-[#3D8361] font-medium flex items-center text-sm hover:underline bg-transparent border-none p-0 cursor-pointer group-hover:translate-x-1 transition-transform"
                   onClick={(e) => {
@@ -299,128 +223,58 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
         <DialogPortal>
           <DialogOverlay className="bg-black/80 backdrop-blur-sm" onClick={closeModal} />
           <DialogContent
-            className="max-w-5xl p-0 border-none bg-white dark:bg-gray-900 max-h-[90vh] overflow-hidden rounded-lg shadow-xl"
+            className="max-w-5xl w-[95%] p-0 border-none bg-white dark:bg-gray-900 max-h-[90vh] overflow-hidden rounded-lg shadow-xl"
             onInteractOutside={closeModal}
             onEscapeKeyDown={closeModal}
           >
             {selectedProject && (
-              <div className="flex flex-col md:flex-row h-full">
-                <div className="relative w-full md:w-2/3 h-[40vh] md:h-[70vh] bg-black">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute top-2 right-2 z-50 bg-black/50 text-white hover:bg-black/70 rounded-full"
-                    onClick={closeModal}
-                  >
-                    <X className="h-5 w-5" />
-                    <span className="sr-only">Close</span>
-                  </Button>
-
-                  {getProjectImages(selectedProject)[currentImageIndex] ? (
+              <div className="flex flex-col h-full">
+                <div className="relative w-full h-[40vh] sm:h-[50vh] md:h-[70vh] bg-black">
+                  <div className="absolute top-4 right-4 z-20">
+                    <button
+                      onClick={closeModal}
+                      className="p-2 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors"
+                      aria-label="Close modal"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  {getProjectImages(selectedProject)[currentImageIndex] && (
                     <Image
-                      src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
-                      alt={selectedProject.name || selectedProject.title || "Project image"}
+                      src={getProjectImages(selectedProject)[currentImageIndex]}
+                      alt={selectedProject.name || selectedProject.title || "Project"}
                       fill
                       className="object-contain"
+                      priority
                       unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement
-                        target.style.display = "none"
-                        const parent = target.parentElement
-                        if (parent) {
-                          const placeholder = document.createElement("div")
-                          placeholder.className = "w-full h-full bg-gray-800 flex items-center justify-center"
-                          placeholder.innerHTML = "<span class='text-gray-400'>No image available</span>"
-                          parent.appendChild(placeholder)
-                        }
-                      }}
                     />
-                  ) : (
-                    <div className="w-full h-full bg-gray-800 flex items-center justify-center">
-                      <span className="text-gray-400">No image available</span>
-                    </div>
                   )}
-
                   {getProjectImages(selectedProject).length > 1 && (
                     <>
-                      <div className="absolute inset-y-0 flex items-center justify-between w-full px-2 sm:px-4">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="bg-black/50 text-white hover:bg-black/70 rounded-full h-8 w-8 sm:h-10 sm:w-10"
-                          onClick={prevImage}
-                        >
-                          <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
-                          <span className="sr-only">Previous image</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="bg-black/50 text-white hover:bg-black/70 rounded-full h-8 w-8 sm:h-10 sm:w-10"
-                          onClick={nextImage}
-                        >
-                          <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
-                          <span className="sr-only">Next image</span>
-                        </Button>
-                      </div>
-
-                      <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
-                        {getProjectImages(selectedProject).map((_, index) => (
-                          <button
-                            key={index}
-                            className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                              index === currentImageIndex ? "bg-white w-4" : "bg-white/50"
-                            }`}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setCurrentImageIndex(index)
-                            }}
-                            aria-label={`Go to image ${index + 1}`}
-                          />
-                        ))}
-                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          previousImage()
+                        }}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors"
+                        aria-label="Previous image"
+                      >
+                        <ChevronLeft className="h-6 w-6" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          nextImage()
+                        }}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors"
+                        aria-label="Next image"
+                      >
+                        <ChevronRight className="h-6 w-6" />
+                      </button>
                     </>
                   )}
                 </div>
-
-                <div className="w-full md:w-1/3 p-4 md:p-6 overflow-auto">
-                  <ScrollArea className="h-[30vh] md:h-[70vh] pr-4">
-                    <div className="space-y-4">
-                      <div>
-                        <Badge className="mb-2 bg-[#3D8361] hover:bg-[#2A5D3C] text-white border-none capitalize">
-                          {selectedProject.category}
-                        </Badge>
-                        <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
-                          {selectedProject.name || selectedProject.title}
-                        </h2>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">Location</p>
-                          <p className="font-medium">{selectedProject.location}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">Client</p>
-                          <p className="font-medium">{selectedProject.client}</p>
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-gray-500 dark:text-gray-400 mb-1">Description</p>
-                        <p className="text-gray-700 dark:text-gray-300">{selectedProject.description}</p>
-                      </div>
-
-                      <div className="pt-4">
-                        <Button className="w-full bg-[#3D8361] hover:bg-[#2A5D3C] text-white">
-                          <Link href="/contact" className="w-full">
-                            Contact Us About This Project
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </ScrollArea>
-                </div>
+               
               </div>
             )}
           </DialogContent>
@@ -646,4 +500,3 @@ export default function ProjectsPage() {
     </div>
   )
 }
-
