@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient"
+import { uploadImage } from "./imageService"
 
 // Type definitions
 type Project = {
