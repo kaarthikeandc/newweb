@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
- // or from your icon library; // or from your icon library
+import { UploadIcon } from "lucide-react"; // or from your icon library
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 import {
   Dialog,
@@ -42,7 +42,7 @@ import {
   Trash2,
   RefreshCw,
   AlertCircle,
-  CheckCircle2,UploadIcon,
+  CheckCircle2,
   X,
   Upload,
   ImageIcon,
@@ -98,12 +98,13 @@ type ClientLogo = {
 
 // Hero Slide type definition
 type HeroSlide = {
-  id: string;
-  title: string;
-  description?: string;
-  image: string; // Ensure this is string, not string | null
-  created_at?: string;
-};
+  id: string
+  title: string
+  description?: string
+  image: string
+  created_at?: string
+}
+
 // Page Hero type definition
 type PageHero = {
   id: string
@@ -817,72 +818,102 @@ const AdminPanel = () => {
 
   // Handle Image Upload
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-  
+    
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
     try {
-      setIsUploading(true);
-      const file = files[0]; // Assuming single file upload for hero slide
-  
-      // Check if file is HEIC format and convert if needed
-      if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
-        try {
-          if (typeof window !== "undefined") {
-            const heic2anyModule = await import("heic2any");
-            const convertedBlob = (await heic2anyModule.default({
-              blob: file,
-              toType: "image/jpeg",
-              quality: 0.8,
-            })) as Blob;
-  
-            file = new File([convertedBlob], file.name.replace(/\.heic$/i, ".jpg"), {
-              type: "image/jpeg",
-              lastModified: new Date().getTime(),
-            });
+      setIsUploading(true)
+      const uploadedUrls: string[] = []
+
+      // Process each file
+      for (let i = 0; i < files.length; i++) {
+        let file = files[i]
+
+        // Check if file is HEIC format and convert if needed
+        if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
+          try {
+            // Use dynamic import with client-side check
+            if (typeof window !== "undefined") {
+              const heic2anyModule = await import("heic2any")
+              const convertedBlob = (await heic2anyModule.default({
+                blob: file,
+                toType: "image/jpeg",
+                quality: 0.8,
+              })) as Blob
+
+              // Create a new file from the converted blob
+              file = new File([convertedBlob], file.name.replace(/\.heic$/i, ".jpg"), {
+                type: "image/jpeg",
+                lastModified: new Date().getTime(),
+              })
+
+              console.log("HEIC image converted successfully")
+            } else {
+              // Skip HEIC files during server-side rendering
+              console.log("Skipping HEIC conversion during server-side rendering")
+              continue
+            }
+          } catch (conversionError) {
+            console.error("HEIC conversion error:", conversionError)
+            showNotification("error", `Failed to convert HEIC image: ${file.name}`)
+            continue // Skip this file and move to the next one
           }
-        } catch (conversionError) {
-          console.error("HEIC conversion error:", conversionError);
-          showNotification("error", `Failed to convert HEIC image: ${file.name}`);
-          return;
         }
-      }
-  
-      // Create a unique file name
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-      const filePath = `hero-slides/${fileName}`;
-  
-      // Upload the file to Supabase Storage first
-      const { error: uploadError } = await supabase.storage
-        .from("hero-slides")
-        .upload(filePath, file);
-  
-      if (uploadError) {
-        throw uploadError;
-      }
-  
-      // Get the public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from("hero-slides")
-        .getPublicUrl(filePath);
-  
-      // Update the editing slide with the new URL
-      setEditingSlide(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          image: publicUrl // This is now definitely a string
-        };
-      });
-  
-      showNotification("success", "Image uploaded successfully!");
-    } catch (error: any) {
-      showNotification("error", `Upload failed: ${error.message}`);
-      console.error("Upload error details:", error);
-    } finally {
-      setIsUploading(false);
-    }
+const reader = new FileReader();
+  reader.onload = (e) => {
+    setEditingSlide((prev) => (prev ? { ...prev, image: e.target.result } : null));
   };
+  reader.readAsDataURL(file);
+        // Create a unique file name
+        const fileExt = file.name.split(".").pop()
+        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
+        const filePath = `project-images/${fileName}`
+
+        // Upload the file to Supabase Storage
+        const { error: uploadError } = await supabase.storage.from("projects").upload(filePath, file)
+
+        if (uploadError) {
+          throw uploadError
+        }
+
+        // Get the public URL
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("projects").getPublicUrl(filePath)
+
+        uploadedUrls.push(publicUrl)
+      }
+
+      // Update the project images array
+      if (projectToEdit) {
+        setProjectToEdit({
+          ...projectToEdit,
+          images: [...(projectToEdit.images || []), ...uploadedUrls],
+        })
+      } else {
+        setNewProject({
+          ...newProject,
+          images: [...newProject.images, ...uploadedUrls],
+        })
+      }
+
+      showNotification(
+        "success",
+        `${uploadedUrls.length} image${uploadedUrls.length > 1 ? "s" : ""} uploaded successfully!`,
+      )
+    } catch (error: any) {
+      showNotification("error", `Upload failed: ${error.message}`)
+      console.error("Upload error details:", error)
+    } finally {
+      setIsUploading(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }
+
   // Handle Logo Upload
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
@@ -2983,7 +3014,6 @@ const AdminPanel = () => {
       <DialogTitle>Edit Slide</DialogTitle>
     </DialogHeader>
     <div className="grid gap-4 py-4">
-      {/* Title and Description fields remain the same */}
       <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="title" className="text-right">
           Title
@@ -3010,62 +3040,50 @@ const AdminPanel = () => {
           className="col-span-3"
         />
       </div>
-
-      {/* Enhanced Drag and Drop Image Uploader */}
+      
+      {/* Drag and Drop Image Uploader */}
       <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="image" className="text-right">
           Image
         </Label>
         <div className="col-span-3">
           <div 
-            className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-6 cursor-pointer hover:bg-gray-50 transition-colors ${isUploading ? 'opacity-70 pointer-events-none' : ''}`}
+            className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-6 cursor-pointer hover:bg-gray-50 transition-colors"
             onDragOver={(e) => {
               e.preventDefault();
-              e.currentTarget.classList.add("border-primary", "bg-gray-50");
+              e.currentTarget.classList.add("border-primary");
             }}
             onDragLeave={(e) => {
               e.preventDefault();
-              e.currentTarget.classList.remove("border-primary", "bg-gray-50");
+              e.currentTarget.classList.remove("border-primary");
             }}
             onDrop={(e) => {
               e.preventDefault();
-              e.currentTarget.classList.remove("border-primary", "bg-gray-50");
-              if (isUploading) return;
-              
-              const files = e.dataTransfer.files;
-              if (files.length > 0) {
-                // Create a synthetic event to reuse your handleImageUpload
-                const syntheticEvent = {
-                  target: {
-                    files: files
-                  }
-                } as React.ChangeEvent<HTMLInputElement>;
-                handleImageUpload(syntheticEvent);
+              e.currentTarget.classList.remove("border-primary");
+              const file = e.dataTransfer.files[0];
+              if (file && file.type.startsWith("image/")) {
+                handleImageUpload(file);
               }
             }}
-            onClick={() => !isUploading && document.getElementById("file-upload")?.click()}
+            onClick={() => document.getElementById("file-upload").click()}
           >
             <input
               id="file-upload"
               type="file"
-              accept="image/*,.heic"
+              accept="image/*"
               className="hidden"
-              onChange={handleImageUpload}
-              disabled={isUploading}
-              multiple={false} // Set to true if you want multiple files
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  handleImageUpload(e.target.files[0]);
+                }
+              }}
             />
-            
-            {isUploading ? (
-              <div className="flex flex-col items-center">
-                <Loader2 className="h-8 w-8 mb-2 animate-spin text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Uploading image...</p>
-              </div>
-            ) : editingSlide?.image ? (
+            {editingSlide?.image ? (
               <>
                 <img 
                   src={editingSlide.image} 
                   alt="Preview" 
-                  className="max-h-40 mb-2 rounded-md object-cover"
+                  className="max-h-40 mb-2 rounded-md"
                 />
                 <p className="text-sm text-muted-foreground">Click or drag to replace</p>
               </>
@@ -3075,14 +3093,14 @@ const AdminPanel = () => {
                 <p className="text-sm text-muted-foreground">
                   <span className="font-medium text-primary">Click to upload</span> or drag and drop
                 </p>
-                <p className="text-xs text-muted-foreground">Supports: JPG, PNG, GIF, HEIC</p>
+                <p className="text-xs text-muted-foreground">PNG, JPG, GIF up to 5MB</p>
               </>
             )}
           </div>
         </div>
       </div>
-
-      {/* Optional URL fallback */}
+      
+      {/* Optional: Keep the URL input as a fallback */}
       <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="image-url" className="text-right">
           Or Image URL
@@ -3102,16 +3120,7 @@ const AdminPanel = () => {
       <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
         Cancel
       </Button>
-      <Button onClick={handleSaveEdit} disabled={isUploading}>
-        {isUploading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Saving...
-          </>
-        ) : (
-          "Save changes"
-        )}
-      </Button>
+      <Button onClick={handleSaveEdit}>Save changes</Button>
     </DialogFooter>
   </DialogContent>
 </Dialog>
