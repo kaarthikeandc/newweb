@@ -52,23 +52,30 @@ export default function AboutPage() {
     {
       initials: "KN",
       name: "Kaarthik Natarajan",
-      role: "Director",
+      role: "Founder",
       qualification: "B.E (Civil), PGP ACM (Construction management from NICMAR - Pune)",
       experience: "11+ Years",
     },
     {
       initials: "SV",
       name: "Singaravelan",
-      role: "Technical Director",
+     
       qualification: "B.E (Civil)",
-      experience: "30+ Years",
+      experience: "30+ Years in Civil Construction",
     },
     {
       initials: "KM",
       name: "Krishnamoorthi",
-      role: "Operations Director",
-      qualification: "Oversees all project operations and resource management",
-      experience: "35+ Years",
+      
+      qualification: "B.E (Mechanical)",
+      experience: "35+ years in Fabrication and Erection of Steel Structures",
+    },
+       {
+      initials: "KK",
+      name: "Kumaran Kandhasamy",
+      
+      qualification: "Diploma in Mechanical Engineering",
+      experience: "10 years in Civil Construction",
     },
   ]
 
