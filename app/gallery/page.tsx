@@ -155,9 +155,7 @@ export default function GalleryPage() {
         <div className="container mx-auto px-4 py-12 md:py-20 relative z-20 text-white">
           <div className="max-w-3xl">
             <h1 className="text-3xl md:text-5xl font-bold mb-4 md:mb-6">Project Gallery</h1>
-            <p className="text-base md:text-xl mb-6 md:mb-8 text-gray-100 max-w-2xl">
-              Browse through our collection of completed projects across various sectors.
-            </p>
+         
           </div>
         </div>
       </section>
