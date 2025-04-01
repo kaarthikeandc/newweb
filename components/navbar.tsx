@@ -17,12 +17,7 @@ const navLinks = [
   {
     name: "Projects",
     href: "/projects",
-    dropdown: [
-      { name: "Infrastructure", href: "/projects" },
-      { name: "Industrial", href: "/projects" },
-      { name: "Commercial", href: "/projects" },
-      { name: "Residential", href: "/projects" },
-    ],
+ 
   },
   { name: "Gallery", href: "/gallery" },
 ]
