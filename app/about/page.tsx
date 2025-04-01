@@ -109,8 +109,8 @@ export default function AboutPage() {
               <div className="max-w-3xl">
                 <h1 className="text-4xl md:text-5xl font-bold mb-6">About Us</h1>
                 <p className="text-lg md:text-xl mb-8 text-gray-100 max-w-2xl">
-                  K Engineering & Construction is a premier construction company with expertise in infrastructure,
-                  industrial, commercial, and residential projects.
+                K Engineering and Construction has leadership team with over 4 Decades of Experience in Civil Construction and fabrication Business.
+ 
                 </p>
               </div>
             </div>
