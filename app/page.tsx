@@ -54,25 +54,25 @@ const DEFAULT_HERO_SLIDES: HeroSlide[] = [
 const SERVICES = [
   {
     title: "Infrastructure",
-    description: "Specialized in fabrication works, water management structures, and irrigation projects.",
+    description: "Specialised in irrigation management Structures and MS Structures for Solar power plants.",
     icon: Landmark,
     link: "/projects#infrastructure"
   },
   {
     title: "Industrial",
-    description: "Comprehensive industrial construction solutions tailored to meet specific industry requirements.",
+    description: "Specialised in large span Industrial Roofing Structure for multiple Applications.",
     icon: Building2,
     link: "/projects#industrial"
   },
   {
     title: "Commercial",
-    description: "Expert construction of retail spaces, office buildings, and commercial complexes.",
+    description: "Experts in Building large scale commercial complexes.",
     icon: Building,
     link: "/projects#commercial"
   },
   {
     title: "Residential",
-    description: "Crafting beautiful, functional homes with attention to detail and quality craftsmanship.",
+    description: "Building homes with attention to detail and quality craftmanship.",
     icon: Home,
     link: "/projects#residential"
   }
