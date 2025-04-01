@@ -352,11 +352,7 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                           <span className="font-medium">Location:</span> {selectedProject.location}
                         </p>
                       )}
-                      {selectedProject.client && (
-                        <p>
-                          <span className="font-medium">Client:</span> {selectedProject.client}
-                        </p>
-                      )}
+                    
                     </div>
                     <p className="text-gray-700 dark:text-gray-300 text-sm sm:text-base">
                       {selectedProject.description}
