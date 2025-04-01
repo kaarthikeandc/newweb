@@ -302,8 +302,8 @@ export default function ContactPage() {
                   <div>
                     <h3 className="font-bold text-gray-900">Email</h3>
                     <p className="text-gray-600 mb-1">For inquiries and quotes</p>
-                    <a href="mailto:Kaarthikeandc@gmail.com" className="text-[#3D8361] hover:underline">
-                      Kaarthikeandc@gmail.com
+                    <a href="mailto:contact@kengineeringandconstruction.com" className="text-[#3D8361] hover:underline">
+                      contact@kengineeringandconstruction.com
                     </a>
                   </div>
                 </div>
@@ -314,7 +314,7 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className="font-bold text-gray-900">Office Location</h3>
-                    <p className="text-gray-600">Coimbatore, Tamil Nadu, India</p>
+                    <p className="text-gray-600">Coimbatore And Erode</p>
                   </div>
                 </div>
 
