@@ -103,7 +103,7 @@ export default function Footer() {
             <ul className="space-y-4">
               <li className="flex items-start space-x-3">
                 <MapPin size={20} className="flex-shrink-0 mt-1" />
-                <span className="text-gray-200">Coimbatore, Tamil Nadu, India</span>
+                <span className="text-gray-200">Coimbatore And Erode</span>
               </li>
               <li className="flex items-center space-x-3">
                 <Phone size={20} className="flex-shrink-0" />
@@ -113,8 +113,8 @@ export default function Footer() {
               </li>
               <li className="flex items-center space-x-3">
                 <Mail size={20} className="flex-shrink-0" />
-                <a href="mailto:Kaarthikeandc@gmail.com" className="text-gray-200 hover:text-white transition-colors">
-                  Kaarthikeandc@gmail.com
+                <a href="mailto:contact@kengineeringandconstruction.com" className="text-gray-200 hover:text-white transition-colors">
+                  contact@kengineeringandconstruction.com
                 </a>
               </li>
             </ul>
