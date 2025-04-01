@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useCallback, useTransition } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -74,10 +74,10 @@ function ProjectsFilter({
           All
         </TabsTrigger>
         {categories.map((category) => (
-          <TabsTrigger 
-            key={category} 
-            value={category} 
-            id={category} 
+          <TabsTrigger
+            key={category}
+            value={category}
+            id={category}
             className="px-2 py-1.5 h-auto text-sm whitespace-nowrap overflow-hidden text-ellipsis"
           >
             {category.charAt(0).toUpperCase() + category.slice(1)}
@@ -103,7 +103,7 @@ function ProjectsSearch({ initialQuery, onSearch }: { initialQuery: string; onSe
   }
 
   return (
-    <div className="relative w-full md:w-64 lg:w-80">
+    <div className="relative w-full">
       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
       <Input
         type="text"
@@ -131,11 +131,12 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
-  const filteredProjects = projects.filter((project) =>
-    project.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.client?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredProjects = projects.filter(
+    (project) =>
+      project.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.client?.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
   const getProjectImages = (project: Project) => {
@@ -158,19 +159,54 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
     setCurrentImageIndex(0)
   }
 
-  const nextImage = () => {
+  const nextImage = useCallback(() => {
     if (selectedProject) {
       const images = getProjectImages(selectedProject)
       setCurrentImageIndex((prev) => (prev + 1) % images.length)
     }
-  }
+  }, [selectedProject])
 
-  const previousImage = () => {
+  const previousImage = useCallback(() => {
     if (selectedProject) {
       const images = getProjectImages(selectedProject)
       setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)
     }
-  }
+  }, [selectedProject])
+
+  useEffect(() => {
+    let touchStartX = 0
+    let touchEndX = 0
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartX = e.changedTouches[0].screenX
+    }
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      touchEndX = e.changedTouches[0].screenX
+      handleSwipe()
+    }
+
+    const handleSwipe = () => {
+      if (touchEndX < touchStartX - 50) {
+        // Swipe left
+        nextImage()
+      }
+      if (touchEndX > touchStartX + 50) {
+        // Swipe right
+        previousImage()
+      }
+    }
+
+    if (isModalOpen && selectedProject) {
+      document.addEventListener("touchstart", handleTouchStart, false)
+      document.addEventListener("touchend", handleTouchEnd, false)
+    }
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouchStart)
+      document.removeEventListener("touchend", handleTouchEnd)
+    }
+  }, [isModalOpen, selectedProject, nextImage, previousImage])
 
   return (
     <>
@@ -252,7 +288,7 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                   </div>
                   {getProjectImages(selectedProject)[currentImageIndex] && (
                     <Image
-                      src={getProjectImages(selectedProject)[currentImageIndex]}
+                      src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
                       alt={selectedProject.name || selectedProject.title || "Project"}
                       fill
                       className="object-contain"
@@ -284,8 +320,49 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                       </button>
                     </>
                   )}
+                  {getProjectImages(selectedProject).length > 1 && (
+                    <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
+                      {getProjectImages(selectedProject).map((_, index) => (
+                        <button
+                          key={index}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setCurrentImageIndex(index)
+                          }}
+                          className={`w-2 h-2 rounded-full ${index === currentImageIndex ? "bg-white" : "bg-white/50"}`}
+                          aria-label={`Go to image ${index + 1}`}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-               
+                <ScrollArea className="p-4 sm:p-6 max-h-[30vh]">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                        {selectedProject.name || selectedProject.title}
+                      </h2>
+                      <Badge className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white border-none capitalize">
+                        {selectedProject.category}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                      {selectedProject.location && (
+                        <p>
+                          <span className="font-medium">Location:</span> {selectedProject.location}
+                        </p>
+                      )}
+                      {selectedProject.client && (
+                        <p>
+                          <span className="font-medium">Client:</span> {selectedProject.client}
+                        </p>
+                      )}
+                    </div>
+                    <p className="text-gray-700 dark:text-gray-300 text-sm sm:text-base">
+                      {selectedProject.description}
+                    </p>
+                  </div>
+                </ScrollArea>
               </div>
             )}
           </DialogContent>
@@ -404,98 +481,98 @@ export default function ProjectsPage() {
         <>
           <Navbar />
 
-      <section className="pt-16 lg:pt-24 relative">
-        <div className="absolute inset-0 bg-black/60 z-10"></div>
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{
-            backgroundImage: heroImage ? `url('${heroImage}')` : "none",
-            backgroundColor: heroImage ? "transparent" : "#2A5D3C",
-          }}
-        ></div>
-        <div className="container mx-auto px-4 py-12 md:py-20 relative z-20 text-white">
-          <div className="max-w-3xl">
-            <h1 className="text-3xl md:text-5xl font-bold mb-4 md:mb-6">Our Projects</h1>
-            <p className="text-base md:text-xl mb-6 md:mb-8 text-gray-100 max-w-2xl">
-              Explore our diverse portfolio of infrastructure, industrial, commercial, and residential projects.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-12 md:py-20">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-            {isLoading ? (
-              <div className="w-full max-w-3xl h-10 bg-muted animate-pulse rounded-md"></div>
-            ) : isMobile ? (
-              <div className="w-full flex gap-4">
-                <ProjectsSearch initialQuery={searchQuery} onSearch={handleSearch} />
-                <ProjectsFilter
-                  categories={categories}
-                  activeTab={activeTab}
-                  isMobile={true}
-                  onTabChange={setActiveTabState}
-                />
+          <section className="pt-16 lg:pt-24 relative">
+            <div className="absolute inset-0 bg-black/60 z-10"></div>
+            <div
+              className="absolute inset-0 bg-cover bg-center"
+              style={{
+                backgroundImage: heroImage ? `url('${heroImage}')` : "none",
+                backgroundColor: heroImage ? "transparent" : "#2A5D3C",
+              }}
+            ></div>
+            <div className="container mx-auto px-4 py-8 md:py-20 relative z-20 text-white">
+              <div className="max-w-3xl">
+                <h1 className="text-2xl md:text-5xl font-bold mb-2 md:mb-6">Our Projects</h1>
+                <p className="text-sm md:text-xl mb-4 md:mb-8 text-gray-100 max-w-2xl">
+                  Explore our diverse portfolio of infrastructure, industrial, commercial, and residential projects.
+                </p>
               </div>
-            ) : (
-              <>
-                <ProjectsFilter categories={categories} activeTab={activeTab} onTabChange={setActiveTabState} />
-                <ProjectsSearch initialQuery={searchQuery} onSearch={handleSearch} />
-              </>
-            )}
-          </div>
+            </div>
+          </section>
 
-          {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="rounded-lg shadow-md overflow-hidden">
-                  <div className="h-64 bg-muted animate-pulse"></div>
-                  <div className="p-6 space-y-4">
-                    <div className="h-6 bg-muted animate-pulse rounded"></div>
-                    <div className="h-4 bg-muted animate-pulse rounded w-3/4"></div>
-                    <div className="h-16 bg-muted animate-pulse rounded"></div>
-                    <div className="h-4 bg-muted animate-pulse rounded w-1/3"></div>
+          <section className="py-12 md:py-20">
+            <div className="container mx-auto px-4">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                {isLoading ? (
+                  <div className="w-full max-w-3xl h-10 bg-muted animate-pulse rounded-md"></div>
+                ) : isMobile ? (
+                  <div className="w-full flex flex-col gap-4">
+                    <ProjectsSearch initialQuery={searchQuery} onSearch={handleSearch} />
+                    <ProjectsFilter
+                      categories={categories}
+                      activeTab={activeTab}
+                      isMobile={true}
+                      onTabChange={setActiveTabState}
+                    />
                   </div>
+                ) : (
+                  <>
+                    <ProjectsFilter categories={categories} activeTab={activeTab} onTabChange={setActiveTabState} />
+                    <ProjectsSearch initialQuery={searchQuery} onSearch={handleSearch} />
+                  </>
+                )}
+              </div>
+
+              {isLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="rounded-lg shadow-md overflow-hidden">
+                      <div className="h-64 bg-muted animate-pulse"></div>
+                      <div className="p-6 space-y-4">
+                        <div className="h-6 bg-muted animate-pulse rounded"></div>
+                        <div className="h-4 bg-muted animate-pulse rounded w-3/4"></div>
+                        <div className="h-16 bg-muted animate-pulse rounded"></div>
+                        <div className="h-4 bg-muted animate-pulse rounded w-1/3"></div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : error ? (
-            <div className="text-center py-20 bg-red-50 rounded-lg border border-red-100">
-              <h3 className="text-xl font-bold mb-2 text-red-600">{error}</h3>
-              <p className="text-red-500 mb-4">There was a problem connecting to the database.</p>
-              <Button variant="outline" onClick={() => window.location.reload()} className="mt-4">
-                Try Again
-              </Button>
-            </div>
-          ) : (
-            <>
-              <ProjectsList projects={filteredByCategory} searchQuery={searchQuery} />
+              ) : error ? (
+                <div className="text-center py-20 bg-red-50 rounded-lg border border-red-100">
+                  <h3 className="text-xl font-bold mb-2 text-red-600">{error}</h3>
+                  <p className="text-red-500 mb-4">There was a problem connecting to the database.</p>
+                  <Button variant="outline" onClick={() => window.location.reload()} className="mt-4">
+                    Try Again
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <ProjectsList projects={filteredByCategory} searchQuery={searchQuery} />
 
-              {filteredByCategory.length > 0 && (
-                <div className="mt-12 text-center">
-                  <p className="text-gray-500 mb-2">
-                    Showing {filteredByCategory.length} {filteredByCategory.length === 1 ? "project" : "projects"}
-                    {activeTab !== "all" ? ` in ${activeTab}` : ""}
-                    {searchQuery ? ` matching "${searchQuery}"` : ""}
-                  </p>
+                  {filteredByCategory.length > 0 && (
+                    <div className="mt-12 text-center">
+                      <p className="text-gray-500 mb-2">
+                        Showing {filteredByCategory.length} {filteredByCategory.length === 1 ? "project" : "projects"}
+                        {activeTab !== "all" ? ` in ${activeTab}` : ""}
+                        {searchQuery ? ` matching "${searchQuery}"` : ""}
+                      </p>
 
-                  {(activeTab !== "all" || searchQuery) && (
-                    <Button variant="outline" asChild className="mt-2">
-                      <Link href="/projects">Clear All Filters</Link>
-                    </Button>
+                      {(activeTab !== "all" || searchQuery) && (
+                        <Button variant="outline" asChild className="mt-2">
+                          <Link href="/projects">Clear All Filters</Link>
+                        </Button>
+                      )}
+                    </div>
                   )}
-                </div>
+                </>
               )}
-            </>
-          )}
-        </div>
-      </section>
+            </div>
+          </section>
 
-  
-      <Footer />
-      </>
-  )}
+          <Footer />
+        </>
+      )}
     </div>
   )
 }
+
