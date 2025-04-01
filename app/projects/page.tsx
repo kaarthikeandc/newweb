@@ -248,7 +248,7 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                 </h3>
                 <div className="text-xs sm:text-sm text-gray-500 mb-2">
                   <p className="truncate">{project.location}</p>
-                  <p className="truncate">Client: {project.client}</p>
+           
                 </div>
                 <p className="text-xs sm:text-sm text-gray-600 mb-3 line-clamp-2">{project.description}</p>
                 <button
