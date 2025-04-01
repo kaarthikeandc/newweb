@@ -12,7 +12,7 @@ import LoadingAnimation from "@/components/loading-animation"
 type Leader = {
   initials: string;
   name: string;
-  role: string;
+ 
   qualification: string;
   experience: string;
 };
@@ -51,8 +51,8 @@ export default function AboutPage() {
   const leadershipTeam: Leader[] = [
     {
       initials: "KN",
-      name: "Kaarthik Natarajan",
-      role: "Founder",
+      name: "Kaarthik Natarajan (Founder)",
+      
       qualification: "B.E (Civil), PGP ACM (Construction management from NICMAR - Pune)",
       experience: "11+ Years",
     },
@@ -139,9 +139,7 @@ export default function AboutPage() {
                           <div className="w-20 h-1 bg-[#3D8361]"></div>
                         </div>
                         <h3 className="text-2xl font-bold mb-1 text-gray-900">{leader.name}</h3>
-                        <p className="text-[#3D8361] font-medium mb-4 inline-block px-3 py-1 bg-[#3D8361]/10 rounded-full text-sm">
-                          {leader.role}
-                        </p>
+                      
                       </div>
                     </div>
                     <div className="p-6 pt-2">
