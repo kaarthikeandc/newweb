@@ -19,6 +19,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta
+          httpEquiv="Content-Security-Policy"
+          content="style-src 'self' 'unsafe-inline'; img-src 'self' data: https://zwyhkqugtactltbiftio.supabase.co;"
+        />
+      </head>
       <body className={inter.className}>
         <NextThemesProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <LoadingAnimation />
