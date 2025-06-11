@@ -1,15 +1,12 @@
 "use client"
 
-import type React from "react"
 import { useState, useEffect, useCallback } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
-import Link from "next/link"
 import Image from "next/image"
-import { ArrowRight, X, ChevronLeft, ChevronRight, Search, Filter } from "lucide-react"
+import { X, ChevronLeft, ChevronRight, Search, Filter, ZoomIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogOverlay, DialogPortal } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -31,352 +28,6 @@ interface Project {
   created_at?: string
 }
 
-function ProjectsFilter({
-  categories,
-  activeTab,
-  isMobile = false,
-  onTabChange,
-}: {
-  categories: string[]
-  activeTab: string
-  isMobile?: boolean
-  onTabChange?: (tab: string) => void
-}) {
-  const handleTabChange = (tab: string) => {
-    onTabChange?.(tab)
-  }
-
-  if (isMobile) {
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="w-full md:w-auto flex justify-between items-center">
-            <span className="truncate">
-              {activeTab === "all" ? "All Projects" : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
-            </span>
-            <Filter className="h-4 w-4 ml-2 flex-shrink-0" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-[200px] max-h-[300px] overflow-y-auto">
-          <DropdownMenuItem onSelect={() => handleTabChange("all")}>All Projects</DropdownMenuItem>
-          {categories.map((category) => (
-            <DropdownMenuItem key={category} onSelect={() => handleTabChange(category)}>
-              {category.charAt(0).toUpperCase() + category.slice(1)}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    )
-  }
-
-  return (
-    <Tabs defaultValue={activeTab} value={activeTab} onValueChange={handleTabChange} className="w-full max-w-3xl">
-      <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 w-full gap-1 h-auto">
-        <TabsTrigger value="all" className="px-2 py-1.5 h-auto text-sm whitespace-nowrap">
-          All
-        </TabsTrigger>
-        {categories.map((category) => (
-          <TabsTrigger
-            key={category}
-            value={category}
-            id={category}
-            className="px-2 py-1.5 h-auto text-sm whitespace-nowrap overflow-hidden text-ellipsis"
-          >
-            {category.charAt(0).toUpperCase() + category.slice(1)}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-    </Tabs>
-  )
-}
-
-function ProjectsSearch({ initialQuery, onSearch }: { initialQuery: string; onSearch: (query: string) => void }) {
-  const [searchQuery, setSearchQuery] = useState(initialQuery)
-
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value
-    setSearchQuery(query)
-    onSearch(query)
-  }
-
-  const clearSearch = () => {
-    setSearchQuery("")
-    onSearch("")
-  }
-
-  return (
-    <div className="relative w-full">
-      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-      <Input
-        type="text"
-        placeholder="Search projects..."
-        className="pl-10 pr-10 py-2 w-full border rounded-md"
-        value={searchQuery}
-        onChange={handleSearch}
-        aria-label="Search projects"
-      />
-      {searchQuery && (
-        <button
-          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-          onClick={clearSearch}
-          aria-label="Clear search"
-        >
-          <X size={18} />
-        </button>
-      )}
-    </div>
-  )
-}
-
-function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQuery: string }) {
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
-
-  const filteredProjects = projects.filter(
-    (project) =>
-      project.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.client?.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
-
-  const getProjectImages = (project: Project) => {
-    const images = []
-    if (project.image) images.push(project.image)
-    if (project.images) images.push(...project.images)
-    return images
-  }
-
-  const openProjectModal = (project: Project, e: React.MouseEvent) => {
-    e.preventDefault()
-    setSelectedProject(project)
-    setCurrentImageIndex(0)
-    setIsModalOpen(true)
-  }
-
-  const closeModal = () => {
-    setIsModalOpen(false)
-    setSelectedProject(null)
-    setCurrentImageIndex(0)
-  }
-
-  const nextImage = useCallback(() => {
-    if (selectedProject) {
-      const images = getProjectImages(selectedProject)
-      setCurrentImageIndex((prev) => (prev + 1) % images.length)
-    }
-  }, [selectedProject])
-
-  const previousImage = useCallback(() => {
-    if (selectedProject) {
-      const images = getProjectImages(selectedProject)
-      setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)
-    }
-  }, [selectedProject])
-
-  useEffect(() => {
-    let touchStartX = 0
-    let touchEndX = 0
-
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartX = e.changedTouches[0].screenX
-    }
-
-    const handleTouchEnd = (e: TouchEvent) => {
-      touchEndX = e.changedTouches[0].screenX
-      handleSwipe()
-    }
-
-    const handleSwipe = () => {
-      if (touchEndX < touchStartX - 50) {
-        nextImage()
-      }
-      if (touchEndX > touchStartX + 50) {
-        previousImage()
-      }
-    }
-
-    if (isModalOpen && selectedProject) {
-      document.addEventListener("touchstart", handleTouchStart, false)
-      document.addEventListener("touchend", handleTouchEnd, false)
-    }
-
-    return () => {
-      document.removeEventListener("touchstart", handleTouchStart)
-      document.removeEventListener("touchend", handleTouchEnd)
-    }
-  }, [isModalOpen, selectedProject, nextImage, previousImage])
-
-  return (
-    <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
-        {filteredProjects.map((project, index) => {
-          const projectImages = getProjectImages(project)
-
-          return (
-            <div
-              key={project.id}
-              className="group overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-gray-200 hover:-translate-y-1 cursor-pointer"
-              onClick={(e) => openProjectModal(project, e)}
-            >
-              <div className="relative h-48 sm:h-52 md:h-64 overflow-hidden">
-                {projectImages[0] ? (
-                  <Image
-                    src={projectImages[0] || "/placeholder.svg"}
-                    alt={project.name || project.title || "Project"}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    priority={index < 6}
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    unoptimized={projectImages[0]?.startsWith("http")}
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                    <span className="text-gray-400 text-sm">No image</span>
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
-                <div className="absolute bottom-0 left-0 p-4 text-white">
-                  <Badge className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white border-none capitalize text-xs sm:text-sm">
-                    {project.category}
-                  </Badge>
-                </div>
-              </div>
-              <div className="p-3 sm:p-4 md:p-6">
-                <h3 className="text-base sm:text-lg md:text-xl font-bold mb-2 text-gray-900 group-hover:text-[#3D8361] transition-colors line-clamp-2">
-                  {project.name || project.title}
-                </h3>
-                <div className="text-xs sm:text-sm text-gray-500 mb-2">
-                  <p className="truncate">{project.location}</p>
-                </div>
-                <p className="text-xs sm:text-sm text-gray-600 mb-3 line-clamp-2">{project.description}</p>
-                <button
-                  className="text-[#3D8361] font-medium flex items-center text-sm hover:underline bg-transparent border-none p-0 cursor-pointer group-hover:translate-x-1 transition-transform"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    openProjectModal(project, e)
-                  }}
-                >
-                  View Project <ArrowRight className="ml-2 h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogPortal>
-          <DialogOverlay className="bg-black/80 backdrop-blur-sm" onClick={closeModal} />
-          <DialogContent
-            className="max-w-5xl w-[95%] p-0 border-none bg-white dark:bg-gray-900 max-h-[90vh] overflow-hidden rounded-xl shadow-2xl"
-            onInteractOutside={closeModal}
-            onEscapeKeyDown={closeModal}
-          >
-            {selectedProject && (
-              <div className="flex flex-col h-full">
-                <div className="relative w-full h-[40vh] sm:h-[50vh] md:h-[70vh] bg-black">
-                  <div className="absolute top-4 right-4 z-20">
-                    <button
-                      onClick={closeModal}
-                      className="p-2 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors"
-                      aria-label="Close modal"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
-                  {getProjectImages(selectedProject)[currentImageIndex] && (
-                    <div className="relative w-full h-full">
-                      <Image
-                        src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
-                        alt={selectedProject.name || selectedProject.title || "Project"}
-                        fill
-                        className="object-contain"
-                        priority
-                        sizes="(max-width: 1024px) 100vw, 80vw"
-                        unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
-                      />
-                    </div>
-                  )}
-                  {getProjectImages(selectedProject).length > 1 && (
-                    <>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          previousImage()
-                        }}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors backdrop-blur-sm"
-                        aria-label="Previous image"
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          nextImage()
-                        }}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors backdrop-blur-sm"
-                        aria-label="Next image"
-                      >
-                        <ChevronRight className="h-5 w-5" />
-                      </button>
-                    </>
-                  )}
-                  {getProjectImages(selectedProject).length > 1 && (
-                    <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-10">
-                      {getProjectImages(selectedProject).map((_, index) => (
-                        <button
-                          key={index}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setCurrentImageIndex(index)
-                          }}
-                          className={`w-3 h-3 rounded-full transition-all ${
-                            index === currentImageIndex ? "bg-white scale-110" : "bg-white/50 hover:bg-white/80"
-                          }`}
-                          aria-label={`Go to image ${index + 1}`}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <ScrollArea className="p-5 sm:p-7 max-h-[30vh]">
-                  <div className="space-y-5">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-                        {selectedProject.name || selectedProject.title}
-                      </h2>
-                      <Badge className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white border-none capitalize">
-                        {selectedProject.category}
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
-                      {selectedProject.location && (
-                        <p>
-                          <span className="font-medium">Location:</span> {selectedProject.location}
-                        </p>
-                      )}
-                      {selectedProject.client && (
-                        <p>
-                          <span className="font-medium">Client:</span> {selectedProject.client}
-                        </p>
-                      )}
-                    </div>
-                    <p className="text-gray-700 dark:text-gray-300 text-sm sm:text-base leading-relaxed">
-                      {selectedProject.description}
-                    </p>
-                  </div>
-                </ScrollArea>
-              </div>
-            )}
-          </DialogContent>
-        </DialogPortal>
-      </Dialog>
-    </>
-  )
-}
-
 export default function ProjectsPage() {
   const router = useRouter()
   const pathname = usePathname()
@@ -386,10 +37,12 @@ export default function ProjectsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState(searchParams?.get("q") || "")
-  const [activeTabState, setActiveTabState] = useState(searchParams?.get("category") || "all")
-  const activeTab = activeTabState
+  const [activeTab, setActiveTab] = useState(searchParams?.get("category") || "all")
   const [isMobile, setIsMobile] = useState(false)
   const [heroImage, setHeroImage] = useState<string>("")
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [visibleCount, setVisibleCount] = useState(12)
 
   useEffect(() => {
     const fetchHeroImage = async () => {
@@ -436,6 +89,7 @@ export default function ProjectsPage() {
 
         if (data) {
           const processedData = data.map((project) => {
+            // Normalize image data
             let images: string[] = []
 
             if (project.images && project.images.length > 0) {
@@ -446,12 +100,14 @@ export default function ProjectsPage() {
 
             return {
               ...project,
-              image: images[0] || "",
-              images,
+              image: images[0] || "", // Keep first image in image field for backward compatibility
+              images, // Store all images in images array
             }
           })
 
           setProjects(processedData)
+
+          // Extract unique categories
           const uniqueCategories = Array.from(new Set(processedData.map((project) => project.category)))
           setCategories(uniqueCategories)
         }
@@ -466,11 +122,56 @@ export default function ProjectsPage() {
     fetchProjects()
   }, [])
 
-  const filteredByCategory =
-    activeTab === "all" ? projects : projects.filter((project) => project.category === activeTab)
+  const getProjectImages = (project: Project) => {
+    const images = []
+    if (project.image) images.push(project.image)
+    if (project.images) images.push(...project.images)
+    return images
+  }
+
+  const filteredProjects = projects.filter(
+    (project) =>
+      (activeTab === "all" || project.category.toLowerCase() === activeTab.toLowerCase()) &&
+      (project.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.client?.toLowerCase().includes(searchQuery.toLowerCase())),
+  )
+
+  const visibleProjects = filteredProjects.slice(0, visibleCount)
+  const hasMore = visibleProjects.length < filteredProjects.length
+
+  const loadMore = () => {
+    setVisibleCount((prev) => prev + 8)
+  }
+
+  const openModal = (project: Project, imageIndex = 0) => {
+    setSelectedProject(project)
+    setCurrentImageIndex(imageIndex)
+  }
+
+  const nextImage = useCallback(() => {
+    if (selectedProject) {
+      const images = getProjectImages(selectedProject)
+      setCurrentImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0))
+    }
+  }, [selectedProject])
+
+  const prevImage = useCallback(() => {
+    if (selectedProject) {
+      const images = getProjectImages(selectedProject)
+      setCurrentImageIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1))
+    }
+  }, [selectedProject])
 
   const handleSearch = (query: string) => {
     setSearchQuery(query)
+  }
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab)
+    setVisibleCount(12) // Reset visible count when changing tabs
   }
 
   return (
@@ -505,41 +206,79 @@ export default function ProjectsPage() {
           <section className="py-12 md:py-20">
             <div className="container mx-auto px-4">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                {isLoading ? (
-                  <div className="w-full max-w-3xl h-10 bg-muted animate-pulse rounded-md"></div>
-                ) : isMobile ? (
+                {isMobile ? (
                   <div className="w-full flex flex-col gap-4">
-                    <ProjectsSearch initialQuery={searchQuery} onSearch={handleSearch} />
-                    <ProjectsFilter
-                      categories={categories}
-                      activeTab={activeTab}
-                      isMobile={true}
-                      onTabChange={setActiveTabState}
-                    />
+                    <div className="relative w-full">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                      <Input
+                        type="text"
+                        placeholder="Search projects..."
+                        className="pl-10 pr-4 py-2 w-full border rounded-md"
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        aria-label="Search projects"
+                      />
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full md:w-auto flex justify-between items-center">
+                          <span className="truncate">
+                            {activeTab === "all"
+                              ? "All Projects"
+                              : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+                          </span>
+                          <Filter className="h-4 w-4 ml-2 flex-shrink-0" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[200px] max-h-[300px] overflow-y-auto">
+                        <DropdownMenuItem onSelect={() => handleTabChange("all")}>All Projects</DropdownMenuItem>
+                        {categories.map((category) => (
+                          <DropdownMenuItem key={category} onSelect={() => handleTabChange(category)}>
+                            {category.charAt(0).toUpperCase() + category.slice(1)}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 ) : (
                   <>
-                    <ProjectsFilter categories={categories} activeTab={activeTab} onTabChange={setActiveTabState} />
-                    <ProjectsSearch initialQuery={searchQuery} onSearch={handleSearch} />
+                    <Tabs
+                      defaultValue={activeTab}
+                      value={activeTab}
+                      onValueChange={handleTabChange}
+                      className="w-full max-w-3xl"
+                    >
+                      <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 w-full gap-1 h-auto">
+                        <TabsTrigger value="all" className="px-2 py-1.5 h-auto text-sm whitespace-nowrap">
+                          All
+                        </TabsTrigger>
+                        {categories.map((category) => (
+                          <TabsTrigger
+                            key={category}
+                            value={category}
+                            className="px-2 py-1.5 h-auto text-sm whitespace-nowrap overflow-hidden text-ellipsis"
+                          >
+                            {category.charAt(0).toUpperCase() + category.slice(1)}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </Tabs>
+                    <div className="relative w-full md:max-w-sm">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                      <Input
+                        type="text"
+                        placeholder="Search projects..."
+                        className="pl-10 pr-4 py-2 w-full border rounded-md"
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        aria-label="Search projects"
+                      />
+                    </div>
                   </>
                 )}
               </div>
 
-              {isLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-                  {[...Array(6)].map((_, i) => (
-                    <div key={i} className="rounded-lg shadow-md overflow-hidden">
-                      <div className="h-64 bg-muted animate-pulse"></div>
-                      <div className="p-6 space-y-4">
-                        <div className="h-6 bg-muted animate-pulse rounded"></div>
-                        <div className="h-4 bg-muted animate-pulse rounded w-3/4"></div>
-                        <div className="h-16 bg-muted animate-pulse rounded"></div>
-                        <div className="h-4 bg-muted animate-pulse rounded w-1/3"></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : error ? (
+              {error ? (
                 <div className="text-center py-20 bg-red-50 rounded-lg border border-red-100">
                   <h3 className="text-xl font-bold mb-2 text-red-600">{error}</h3>
                   <p className="text-red-500 mb-4">There was a problem connecting to the database.</p>
@@ -547,29 +286,208 @@ export default function ProjectsPage() {
                     Try Again
                   </Button>
                 </div>
+              ) : filteredProjects.length === 0 ? (
+                <div className="text-center py-20">
+                  <h3 className="text-xl font-bold mb-2">No projects found</h3>
+                  <p className="text-gray-600 mb-4">Try adjusting your search or filter criteria</p>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearchQuery("")
+                      setActiveTab("all")
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
+                </div>
               ) : (
                 <>
-                  <ProjectsList projects={filteredByCategory} searchQuery={searchQuery} />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                    {visibleProjects.map((project) => {
+                      const projectImages = getProjectImages(project)
 
-                  {filteredByCategory.length > 0 && (
-                    <div className="mt-12 text-center">
-                      <p className="text-gray-500 mb-2">
-                        Showing {filteredByCategory.length} {filteredByCategory.length === 1 ? "project" : "projects"}
-                        {activeTab !== "all" ? ` in ${activeTab}` : ""}
-                        {searchQuery ? ` matching "${searchQuery}"` : ""}
-                      </p>
+                      return (
+                        <div
+                          key={project.id}
+                          className="group relative overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer"
+                          onClick={() => openModal(project, 0)}
+                        >
+                          <div className="relative h-52 sm:h-64 overflow-hidden">
+                            {projectImages[0] ? (
+                              <Image
+                                src={projectImages[0] || "/placeholder.svg"}
+                                alt={project.name || project.title || "Project"}
+                                fill
+                                className="object-cover transition-transform duration-500 group-hover:scale-110"
+                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                                unoptimized={projectImages[0]?.startsWith("http")}
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                <span className="text-gray-400 text-sm">No image</span>
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <div className="bg-white/90 rounded-full p-2 sm:p-3">
+                                <ZoomIn className="h-5 w-5 sm:h-6 sm:w-6 text-[#2A5D3C]" />
+                              </div>
+                            </div>
+                            {projectImages.length > 1 && (
+                              <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
+                                +{projectImages.length - 1}
+                              </div>
+                            )}
+                            <div className="absolute bottom-0 left-0 p-3 bg-gradient-to-t from-black/70 to-transparent w-full">
+                              <div className="flex items-center justify-between">
+                                <span className="text-white font-medium text-sm sm:text-base line-clamp-1">
+                                  {project.name || project.title}
+                                </span>
+                                <Badge className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white border-none capitalize text-xs">
+                                  {project.category}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
 
-                      {(activeTab !== "all" || searchQuery) && (
-                        <Button variant="outline" asChild className="mt-2">
-                          <Link href="/projects">Clear All Filters</Link>
-                        </Button>
-                      )}
+                  {hasMore && (
+                    <div className="flex justify-center mt-12">
+                      <Button className="bg-[#2A5D3C] hover:bg-[#3D8361]" onClick={loadMore}>
+                        Load More
+                      </Button>
                     </div>
                   )}
                 </>
               )}
             </div>
           </section>
+
+          {/* Image Modal */}
+          {selectedProject && (
+            <div
+              className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-2 sm:p-4"
+              onClick={() => setSelectedProject(null)}
+            >
+              <div
+                className="relative max-w-5xl w-full bg-white rounded-lg overflow-hidden max-h-[90vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-white/80 rounded-full p-1.5 sm:p-2 hover:bg-white transition-colors z-10"
+                  onClick={() => setSelectedProject(null)}
+                >
+                  <X className="h-5 w-5 sm:h-6 sm:w-6" />
+                </button>
+
+                <div className="relative h-[50vh] sm:h-[60vh] md:h-[70vh]">
+                  {getProjectImages(selectedProject)[currentImageIndex] ? (
+                    <Image
+                      src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
+                      alt={`${selectedProject.name || selectedProject.title} - Image ${currentImageIndex + 1}`}
+                      fill
+                      className="object-contain"
+                      priority
+                      sizes="(max-width: 1024px) 100vw, 80vw"
+                      unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                      <span className="text-gray-400">No image available</span>
+                    </div>
+                  )}
+
+                  {getProjectImages(selectedProject).length > 1 && (
+                    <>
+                      <button
+                        className="absolute left-2 sm:left-4 top-1/2 transform -translate-y-1/2 bg-white/80 rounded-full p-2 sm:p-3 hover:bg-white transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          prevImage()
+                        }}
+                      >
+                        <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </button>
+                      <button
+                        className="absolute right-2 sm:right-4 top-1/2 transform -translate-y-1/2 bg-white/80 rounded-full p-2 sm:p-3 hover:bg-white transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          nextImage()
+                        }}
+                      >
+                        <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* Thumbnails for multiple images */}
+                {getProjectImages(selectedProject).length > 1 && (
+                  <div className="px-3 sm:px-6 pt-2 sm:pt-4 overflow-x-auto">
+                    <div className="flex gap-1 sm:gap-2 pb-2 snap-x snap-mandatory">
+                      {getProjectImages(selectedProject).map((img, idx) => (
+                        <div
+                          key={idx}
+                          className={`relative w-12 h-12 sm:w-16 sm:h-16 rounded overflow-hidden cursor-pointer border-2 flex-shrink-0 snap-start ${
+                            idx === currentImageIndex ? "border-[#2A5D3C]" : "border-transparent"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setCurrentImageIndex(idx)
+                          }}
+                        >
+                          {img ? (
+                            <Image
+                              src={img || "/placeholder.svg"}
+                              alt={`Thumbnail ${idx + 1}`}
+                              fill
+                              className="object-cover"
+                              unoptimized={img?.startsWith("http")}
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                              <span className="text-gray-400 text-xs">Empty</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Project details */}
+                <ScrollArea className="p-4 sm:p-6 max-h-[30vh]">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                        {selectedProject.name || selectedProject.title}
+                      </h2>
+                      <Badge className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white border-none capitalize">
+                        {selectedProject.category}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                      {selectedProject.location && (
+                        <p>
+                          <span className="font-medium">Location:</span> {selectedProject.location}
+                        </p>
+                      )}
+                      {selectedProject.client && (
+                        <p>
+                          <span className="font-medium">Client:</span> {selectedProject.client}
+                        </p>
+                      )}
+                    </div>
+                    <p className="text-gray-700 dark:text-gray-300 text-sm sm:text-base">
+                      {selectedProject.description}
+                    </p>
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          )}
 
           <Footer />
         </>
