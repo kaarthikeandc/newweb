@@ -211,13 +211,13 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
-        {filteredProjects.map((project) => {
+        {filteredProjects.map((project, index) => {
           const projectImages = getProjectImages(project)
 
           return (
             <div
               key={project.id}
-              className="group overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-gray-200 hover:-translate-y-1"
+              className="group overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-gray-200 hover:-translate-y-1 cursor-pointer"
               onClick={(e) => openProjectModal(project, e)}
             >
               <div className="relative h-48 sm:h-52 md:h-64 overflow-hidden">
@@ -227,7 +227,8 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                     alt={project.name || project.title || "Project"}
                     fill
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    priority
+                    priority={index < 6} // Only prioritize first 6 images
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     unoptimized={projectImages[0]?.startsWith("http")}
                   />
                 ) : (
@@ -248,7 +249,6 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                 </h3>
                 <div className="text-xs sm:text-sm text-gray-500 mb-2">
                   <p className="truncate">{project.location}</p>
-           
                 </div>
                 <p className="text-xs sm:text-sm text-gray-600 mb-3 line-clamp-2">{project.description}</p>
                 <button
@@ -270,7 +270,7 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
         <DialogPortal>
           <DialogOverlay className="bg-black/80 backdrop-blur-sm" onClick={closeModal} />
           <DialogContent
-            className="max-w-5xl w-[95%] p-0 border-none bg-white dark:bg-gray-900 max-h-[90vh] overflow-hidden rounded-lg shadow-xl"
+            className="max-w-5xl w-[95%] p-0 border-none bg-white dark:bg-gray-900 max-h-[90vh] overflow-hidden rounded-xl shadow-2xl"
             onInteractOutside={closeModal}
             onEscapeKeyDown={closeModal}
           >
@@ -287,14 +287,18 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                     </button>
                   </div>
                   {getProjectImages(selectedProject)[currentImageIndex] && (
-                    <Image
-                      src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
-                      alt={selectedProject.name || selectedProject.title || "Project"}
-                      fill
-                      className="object-contain"
-                      priority
-                      unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
-                    />
+                    <div className="relative w-full h-full">
+                      <Image
+                        src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
+                        alt={selectedProject.name || selectedProject.title || "Project"}
+                        fill
+                        className="object-contain"
+                        priority
+                        sizes="(max-width: 1024px) 100vw, 80vw"
+                        loading="eager"
+                        unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
+                      />
+                    </div>
                   )}
                   {getProjectImages(selectedProject).length > 1 && (
                     <>
@@ -303,25 +307,25 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                           e.stopPropagation()
                           previousImage()
                         }}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors"
+                        className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors backdrop-blur-sm"
                         aria-label="Previous image"
                       >
-                        <ChevronLeft className="h-6 w-6" />
+                        <ChevronLeft className="h-5 w-5" />
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
                           nextImage()
                         }}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors backdrop-blur-sm"
                         aria-label="Next image"
                       >
-                        <ChevronRight className="h-6 w-6" />
+                        <ChevronRight className="h-5 w-5" />
                       </button>
                     </>
                   )}
                   {getProjectImages(selectedProject).length > 1 && (
-                    <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
+                    <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-10">
                       {getProjectImages(selectedProject).map((_, index) => (
                         <button
                           key={index}
@@ -329,15 +333,17 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                             e.stopPropagation()
                             setCurrentImageIndex(index)
                           }}
-                          className={`w-2 h-2 rounded-full ${index === currentImageIndex ? "bg-white" : "bg-white/50"}`}
+                          className={`w-3 h-3 rounded-full transition-all ${
+                            index === currentImageIndex ? "bg-white scale-110" : "bg-white/50 hover:bg-white/80"
+                          }`}
                           aria-label={`Go to image ${index + 1}`}
                         />
                       ))}
                     </div>
                   )}
                 </div>
-                <ScrollArea className="p-4 sm:p-6 max-h-[30vh]">
-                  <div className="space-y-4">
+                <ScrollArea className="p-5 sm:p-7 max-h-[30vh]">
+                  <div className="space-y-5">
                     <div className="flex items-center justify-between">
                       <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
                         {selectedProject.name || selectedProject.title}
@@ -352,9 +358,13 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                           <span className="font-medium">Location:</span> {selectedProject.location}
                         </p>
                       )}
-                    
+                      {selectedProject.client && (
+                        <p>
+                          <span className="font-medium">Client:</span> {selectedProject.client}
+                        </p>
+                      )}
                     </div>
-                    <p className="text-gray-700 dark:text-gray-300 text-sm sm:text-base">
+                    <p className="text-gray-700 dark:text-gray-300 text-sm sm:text-base leading-relaxed">
                       {selectedProject.description}
                     </p>
                   </div>
@@ -367,6 +377,17 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
     </>
   )
 }
+
+const preloadImages = useCallback((projects: Project[]) => {
+  // Preload first image of each project
+  projects.slice(0, 6).forEach((project) => {
+    const images = getProjectImages(project)
+    if (images[0]) {
+      const img = new Image()
+      img.src = images[0]
+    }
+  })
+}, [])
 
 export default function ProjectsPage() {
   const router = useRouter()
@@ -459,6 +480,12 @@ export default function ProjectsPage() {
 
     fetchProjects()
   }, [])
+
+  useEffect(() => {
+    if (projects.length > 0) {
+      preloadImages(projects)
+    }
+  }, [projects, preloadImages])
 
   const filteredByCategory =
     activeTab === "all" ? projects : projects.filter((project) => project.category === activeTab)
@@ -571,4 +598,3 @@ export default function ProjectsPage() {
     </div>
   )
 }
-
