@@ -27,12 +27,95 @@ interface Project {
   created_at?: string
 }
 
-// Image skeleton component
-const ImageSkeleton = ({ className }: { className?: string }) => (
-  <div className={`bg-gray-200 animate-pulse ${className}`}>
+// Optimized image skeleton with proper dimensions
+const ImageSkeleton = ({ className, aspectRatio = "aspect-[4/3]" }: { className?: string; aspectRatio?: string }) => (
+  <div className={`bg-gray-200 animate-pulse ${aspectRatio} ${className}`}>
     <div className="w-full h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 animate-pulse"></div>
   </div>
 )
+
+// Optimized image component with next-gen format support
+const OptimizedImage = ({
+  src,
+  alt,
+  width,
+  height,
+  className,
+  priority = false,
+  quality = 75,
+  sizes,
+  onLoad,
+  onLoadStart,
+  fill = false,
+  ...props
+}: {
+  src: string
+  alt: string
+  width?: number
+  height?: number
+  className?: string
+  priority?: boolean
+  quality?: number
+  sizes?: string
+  onLoad?: () => void
+  onLoadStart?: () => void
+  fill?: boolean
+  [key: string]: any
+}) => {
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [imageError, setImageError] = useState(false)
+
+  const handleLoad = () => {
+    setImageLoaded(true)
+    onLoad?.()
+  }
+
+  const handleLoadStart = () => {
+    setImageLoaded(false)
+    onLoadStart?.()
+  }
+
+  const handleError = () => {
+    setImageError(true)
+    setImageLoaded(true)
+  }
+
+  if (imageError) {
+    return (
+      <div className={`bg-gray-100 flex items-center justify-center ${className}`}>
+        <span className="text-gray-400 text-sm">Image unavailable</span>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {!imageLoaded && (
+        <ImageSkeleton
+          className={fill ? "absolute inset-0" : className}
+          aspectRatio={fill ? "w-full h-full" : "aspect-[4/3]"}
+        />
+      )}
+      <Image
+        src={src || "/placeholder.svg"}
+        alt={alt}
+        width={width}
+        height={height}
+        fill={fill}
+        className={`${className} ${imageLoaded ? "opacity-100" : "opacity-0"} transition-opacity duration-300`}
+        priority={priority}
+        quality={quality}
+        sizes={sizes}
+        onLoad={handleLoad}
+        onLoadStart={handleLoadStart}
+        onError={handleError}
+        placeholder="blur"
+        blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q=="
+        {...props}
+      />
+    </>
+  )
+}
 
 export default function ProjectsPage() {
   const router = useRouter()
@@ -52,6 +135,10 @@ export default function ProjectsPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set())
 
+  // Intersection Observer for lazy loading
+  const observerRef = useRef<IntersectionObserver | null>(null)
+  const [visibleElements, setVisibleElements] = useState<Set<string>>(new Set())
+
   // Refs for tracking current project and image index
   const selectedProjectRef = useRef<Project | null>(null)
   const currentImageIndexRef = useRef<number>(0)
@@ -61,6 +148,27 @@ export default function ProjectsPage() {
     selectedProjectRef.current = selectedProject
     currentImageIndexRef.current = currentImageIndex
   }, [selectedProject, currentImageIndex])
+
+  // Initialize Intersection Observer for better lazy loading
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setVisibleElements((prev) => new Set(prev).add(entry.target.id))
+          }
+        })
+      },
+      {
+        rootMargin: "50px",
+        threshold: 0.1,
+      },
+    )
+
+    return () => {
+      observerRef.current?.disconnect()
+    }
+  }, [])
 
   useEffect(() => {
     const fetchHeroImage = async () => {
@@ -161,7 +269,7 @@ export default function ProjectsPage() {
     return [...new Set(images)].filter((img) => img && img.trim() !== "")
   }
 
-  // Simplified preloading - only preload next/previous images
+  // Minimal preloading - only critical adjacent images
   const preloadAdjacentImages = useCallback(() => {
     const project = selectedProjectRef.current
     if (!project) return
@@ -170,17 +278,23 @@ export default function ProjectsPage() {
     if (images.length <= 1) return
 
     const nextIndex = (currentImageIndexRef.current + 1) % images.length
-    const prevIndex =
-      (currentImageIndexRef.current - 1 + images.length) %
-      images.length[
-        // Only preload adjacent images
-        (images[nextIndex], images[prevIndex])
-      ].forEach((src) => {
-        if (src && !loadingImages.has(src)) {
-          const img = new Image()
-          img.src = src
-        }
-      })
+    const prevIndex = (currentImageIndexRef.current - 1 + images.length) % images.length
+
+    // Only preload if not already loading
+    ;[images[nextIndex], images[prevIndex]].forEach((src) => {
+      if (src && !loadingImages.has(src)) {
+        const link = document.createElement("link")
+        link.rel = "preload"
+        link.as = "image"
+        link.href = src
+        document.head.appendChild(link)
+
+        // Clean up after 5 seconds
+        setTimeout(() => {
+          document.head.removeChild(link)
+        }, 5000)
+      }
+    })
   }, [loadingImages])
 
   const filteredProjects = projects.filter(
@@ -196,21 +310,21 @@ export default function ProjectsPage() {
   const visibleProjects = filteredProjects.slice(0, visibleCount)
   const hasMore = visibleProjects.length < filteredProjects.length
 
-  const loadMore = () => {
+  const loadMore = useCallback(() => {
     setVisibleCount((prev) => prev + 8)
-  }
+  }, [])
 
-  const openModal = (project: Project, imageIndex = 0) => {
+  const openModal = useCallback((project: Project, imageIndex = 0) => {
     setSelectedProject(project)
     setCurrentImageIndex(imageIndex)
-  }
+  }, [])
 
   const nextImage = useCallback(() => {
     if (selectedProject) {
       const images = getProjectImages(selectedProject)
       setCurrentImageIndex((prev) => {
         const newIndex = prev < images.length - 1 ? prev + 1 : 0
-        // Preload adjacent images after changing
+        // Preload adjacent images after changing with delay
         setTimeout(() => preloadAdjacentImages(), 100)
         return newIndex
       })
@@ -222,7 +336,7 @@ export default function ProjectsPage() {
       const images = getProjectImages(selectedProject)
       setCurrentImageIndex((prev) => {
         const newIndex = prev > 0 ? prev - 1 : images.length - 1
-        // Preload adjacent images after changing
+        // Preload adjacent images after changing with delay
         setTimeout(() => preloadAdjacentImages(), 100)
         return newIndex
       })
@@ -237,29 +351,32 @@ export default function ProjectsPage() {
     }
   }, [selectedProject, currentImageIndex, preloadAdjacentImages])
 
-  const handleSearch = (query: string) => {
+  const handleSearch = useCallback((query: string) => {
     setSearchQuery(query)
-  }
+  }, [])
 
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab)
-    setVisibleCount(12) // Reset visible count when changing tabs
-    if (isMobile) {
-      setShowFilters(false) // Hide filters after selection on mobile
-    }
-  }
+  const handleTabChange = useCallback(
+    (tab: string) => {
+      setActiveTab(tab)
+      setVisibleCount(12) // Reset visible count when changing tabs
+      if (isMobile) {
+        setShowFilters(false) // Hide filters after selection on mobile
+      }
+    },
+    [isMobile],
+  )
 
-  const handleImageLoadStart = (src: string) => {
+  const handleImageLoadStart = useCallback((src: string) => {
     setLoadingImages((prev) => new Set(prev).add(src))
-  }
+  }, [])
 
-  const handleImageLoadComplete = (src: string) => {
+  const handleImageLoadComplete = useCallback((src: string) => {
     setLoadingImages((prev) => {
       const newSet = new Set(prev)
       newSet.delete(src)
       return newSet
     })
-  }
+  }, [])
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -329,13 +446,20 @@ export default function ProjectsPage() {
 
           <section className="pt-16 lg:pt-24 relative">
             <div className="absolute inset-0 bg-black/60 z-10"></div>
-            <div
-              className="absolute inset-0 bg-cover bg-center"
-              style={{
-                backgroundImage: heroImage ? `url('${heroImage}')` : "none",
-                backgroundColor: heroImage ? "transparent" : "#2A5D3C",
-              }}
-            ></div>
+            {heroImage && (
+              <div className="absolute inset-0">
+                <OptimizedImage
+                  src={heroImage}
+                  alt="Projects Hero"
+                  fill
+                  className="object-cover"
+                  priority
+                  quality={85}
+                  sizes="100vw"
+                />
+              </div>
+            )}
+            {!heroImage && <div className="absolute inset-0 bg-[#2A5D3C]"></div>}
             <div className="container mx-auto px-4 py-8 md:py-20 relative z-20 text-white">
               <div className="max-w-3xl">
                 <h1 className="text-2xl md:text-5xl font-bold mb-2 md:mb-6">Our Projects</h1>
@@ -470,32 +594,33 @@ export default function ProjectsPage() {
                     {visibleProjects.map((project, index) => {
                       const projectImages = getProjectImages(project)
                       const imageSrc = projectImages[0]
-                      const isImageLoading = loadingImages.has(imageSrc)
+                      const isAboveFold = index < 4
 
                       return (
                         <div
                           key={project.id}
+                          id={`project-${project.id}`}
                           className="group relative overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer"
                           onClick={() => openModal(project, 0)}
+                          ref={(el) => {
+                            if (el && observerRef.current && !isAboveFold) {
+                              observerRef.current.observe(el)
+                            }
+                          }}
                         >
-                          <div className="relative h-64 sm:h-60 md:h-64 overflow-hidden">
+                          <div className="relative aspect-[4/3] overflow-hidden">
                             {imageSrc ? (
-                              <>
-                                {isImageLoading && <ImageSkeleton className="absolute inset-0 z-10" />}
-                                <Image
-                                  src={imageSrc || "/placeholder.svg"}
-                                  alt={project.name || project.title || "Project"}
-                                  fill
-                                  className="object-cover transition-transform duration-500 group-hover:scale-110"
-                                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                                  priority={index < 4} // Only prioritize first 4 images
-                                  loading={index < 4 ? "eager" : "lazy"}
-                                  quality={75} // Reduce quality for faster loading
-                                  onLoadingComplete={() => handleImageLoadComplete(imageSrc)}
-                                  onLoad={() => handleImageLoadComplete(imageSrc)}
-                                  onLoadStart={() => handleImageLoadStart(imageSrc)}
-                                />
-                              </>
+                              <OptimizedImage
+                                src={imageSrc}
+                                alt={project.name || project.title || "Project"}
+                                fill
+                                className="object-cover transition-transform duration-500 group-hover:scale-110"
+                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                                priority={isAboveFold}
+                                quality={isAboveFold ? 85 : 75}
+                                onLoad={() => handleImageLoadComplete(imageSrc)}
+                                onLoadStart={() => handleImageLoadStart(imageSrc)}
+                              />
                             ) : (
                               <div className="w-full h-full bg-gray-100 flex items-center justify-center">
                                 <span className="text-gray-400 text-sm">No image</span>
@@ -539,7 +664,7 @@ export default function ProjectsPage() {
             </div>
           </section>
 
-          {/* Image Modal - Optimized Loading */}
+          {/* Image Modal - Optimized */}
           {selectedProject && (
             <div
               className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-0 sm:p-4"
@@ -559,26 +684,18 @@ export default function ProjectsPage() {
                 <div className="relative h-[60vh] sm:h-[60vh] md:h-[70vh] bg-black">
                   {(() => {
                     const currentImageSrc = getProjectImages(selectedProject)[currentImageIndex]
-                    const isCurrentImageLoading = loadingImages.has(currentImageSrc)
 
                     return (
                       <>
-                        {isCurrentImageLoading && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/10 z-10">
-                            <div className="w-10 h-10 border-4 border-[#3D8361] border-t-transparent rounded-full animate-spin"></div>
-                          </div>
-                        )}
-
                         {currentImageSrc ? (
-                          <Image
-                            src={currentImageSrc || "/placeholder.svg"}
+                          <OptimizedImage
+                            src={currentImageSrc}
                             alt={`${selectedProject.name || selectedProject.title} - Image ${currentImageIndex + 1}`}
                             fill
                             className="object-contain"
                             priority
-                            quality={85}
+                            quality={90}
                             sizes="100vw"
-                            onLoadingComplete={() => handleImageLoadComplete(currentImageSrc)}
                             onLoad={() => handleImageLoadComplete(currentImageSrc)}
                             onLoadStart={() => handleImageLoadStart(currentImageSrc)}
                           />
@@ -624,44 +741,36 @@ export default function ProjectsPage() {
                 {getProjectImages(selectedProject).length > 1 && (
                   <div className="px-2 sm:px-6 pt-2 sm:pt-4 overflow-x-auto bg-white">
                     <div className="flex gap-1 sm:gap-2 pb-2 snap-x snap-mandatory">
-                      {getProjectImages(selectedProject).map((img, idx) => {
-                        const isThumbLoading = loadingImages.has(img)
-
-                        return (
-                          <div
-                            key={idx}
-                            className={`relative w-16 h-16 sm:w-16 sm:h-16 rounded overflow-hidden cursor-pointer border-2 flex-shrink-0 snap-start ${
-                              idx === currentImageIndex ? "border-[#2A5D3C]" : "border-transparent"
-                            }`}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setCurrentImageIndex(idx)
-                            }}
-                          >
-                            {img ? (
-                              <>
-                                {isThumbLoading && <ImageSkeleton className="absolute inset-0 z-10" />}
-                                <Image
-                                  src={img || "/placeholder.svg"}
-                                  alt={`Thumbnail ${idx + 1}`}
-                                  fill
-                                  className="object-cover"
-                                  quality={60} // Lower quality for thumbnails
-                                  sizes="64px"
-                                  loading="lazy"
-                                  onLoadingComplete={() => handleImageLoadComplete(img)}
-                                  onLoad={() => handleImageLoadComplete(img)}
-                                  onLoadStart={() => handleImageLoadStart(img)}
-                                />
-                              </>
-                            ) : (
-                              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                                <span className="text-gray-400 text-xs">Empty</span>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
+                      {getProjectImages(selectedProject).map((img, idx) => (
+                        <div
+                          key={idx}
+                          className={`relative w-16 h-16 sm:w-16 sm:h-16 rounded overflow-hidden cursor-pointer border-2 flex-shrink-0 snap-start ${
+                            idx === currentImageIndex ? "border-[#2A5D3C]" : "border-transparent"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setCurrentImageIndex(idx)
+                          }}
+                        >
+                          {img ? (
+                            <OptimizedImage
+                              src={img}
+                              alt={`Thumbnail ${idx + 1}`}
+                              width={64}
+                              height={64}
+                              className="object-cover w-full h-full"
+                              quality={60}
+                              sizes="64px"
+                              onLoad={() => handleImageLoadComplete(img)}
+                              onLoadStart={() => handleImageLoadStart(img)}
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                              <span className="text-gray-400 text-xs">Empty</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
