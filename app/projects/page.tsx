@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowRight, X, ChevronLeft, ChevronRight, Search, Filter } from 'lucide-react'
+import { ArrowRight, X, ChevronLeft, ChevronRight, Search, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -130,7 +130,6 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [imageLoading, setImageLoading] = useState(true);
 
   const filteredProjects = projects.filter(
     (project) =>
@@ -174,27 +173,6 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
     }
   }, [selectedProject])
 
-  const preloadImages = useCallback((images: string[]) => {
-    if (!images || images.length <= 1) return;
-
-    // Preload next and previous images
-    const nextIndex = (currentImageIndex + 1) % images.length;
-    const prevIndex = (currentImageIndex - 1 + images.length) % images.length;
-
-    [nextIndex, prevIndex].forEach(index => {
-      const img = new Image();
-      img.src = images[index];
-      img.crossOrigin = "anonymous";
-    });
-  }, [currentImageIndex]);
-
-  useEffect(() => {
-    if (selectedProject && isModalOpen) {
-      const images = getProjectImages(selectedProject);
-      preloadImages(images);
-    }
-  }, [selectedProject, isModalOpen, currentImageIndex, preloadImages, getProjectImages]);
-
   useEffect(() => {
     let touchStartX = 0
     let touchEndX = 0
@@ -230,16 +208,10 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
     }
   }, [isModalOpen, selectedProject, nextImage, previousImage])
 
-  useEffect(() => {
-    if (selectedProject) {
-      setImageLoading(true);
-    }
-  }, [currentImageIndex, selectedProject]);
-
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
-        {filteredProjects.map((project, index) => {
+        {filteredProjects.map((project) => {
           const projectImages = getProjectImages(project)
 
           return (
@@ -255,10 +227,7 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                     alt={project.name || project.title || "Project"}
                     fill
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    priority={index < 6} // Add priority for first 6 images
-                    loading={index < 6 ? "eager" : "lazy"}
-                    placeholder="blur"
-                    blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PC9zdmc+"
+                    priority
                     unoptimized={projectImages[0]?.startsWith("http")}
                   />
                 ) : (
@@ -318,22 +287,14 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                     </button>
                   </div>
                   {getProjectImages(selectedProject)[currentImageIndex] && (
-                    <>
-                      {imageLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-8 h-8 border-4 border-t-transparent border-[#3D8361] rounded-full animate-spin"></div>
-                        </div>
-                      )}
-                      <Image
-                        src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
-                        alt={selectedProject.name || selectedProject.title || "Project"}
-                        fill
-                        className={`object-contain z-10 transition-opacity duration-300 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
-                        priority
-                        onLoadingComplete={() => setImageLoading(false)}
-                        unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
-                      />
-                    </>
+                    <Image
+                      src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
+                      alt={selectedProject.name || selectedProject.title || "Project"}
+                      fill
+                      className="object-contain"
+                      priority
+                      unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
+                    />
                   )}
                   {getProjectImages(selectedProject).length > 1 && (
                     <>
@@ -610,3 +571,4 @@ export default function ProjectsPage() {
     </div>
   )
 }
+
