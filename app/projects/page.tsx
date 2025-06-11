@@ -136,9 +136,19 @@ export default function ProjectsPage() {
 
   const getProjectImages = (project: Project) => {
     const images = []
-    if (project.image) images.push(project.image)
-    if (project.images) images.push(...project.images)
-    return images
+
+    // Add images from the images array first
+    if (project.images && project.images.length > 0) {
+      images.push(...project.images)
+    }
+
+    // Only add project.image if it's not already in the images array
+    if (project.image && !images.includes(project.image)) {
+      images.unshift(project.image) // Add to beginning if it's different
+    }
+
+    // Remove any duplicates and filter out empty strings
+    return [...new Set(images)].filter((img) => img && img.trim() !== "")
   }
 
   // Image preloading function
