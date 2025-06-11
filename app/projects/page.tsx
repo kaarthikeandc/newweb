@@ -7,7 +7,6 @@ import { X, ChevronLeft, ChevronRight, Search, Filter, ZoomIn } from "lucide-rea
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import Navbar from "@/components/navbar"
@@ -28,6 +27,13 @@ interface Project {
   created_at?: string
 }
 
+// Image skeleton component
+const ImageSkeleton = ({ className }: { className?: string }) => (
+  <div className={`bg-gray-200 animate-pulse ${className}`}>
+    <div className="w-full h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 animate-pulse"></div>
+  </div>
+)
+
 export default function ProjectsPage() {
   const router = useRouter()
   const pathname = usePathname()
@@ -43,8 +49,8 @@ export default function ProjectsPage() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [visibleCount, setVisibleCount] = useState(12)
-  const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
-  const [isImageLoading, setIsImageLoading] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set())
 
   // Refs for tracking current project and image index
   const selectedProjectRef = useRef<Project | null>(null)
@@ -78,7 +84,11 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (!mobile) {
+        setShowFilters(false)
+      }
     }
 
     checkMobile()
@@ -151,59 +161,7 @@ export default function ProjectsPage() {
     return [...new Set(images)].filter((img) => img && img.trim() !== "")
   }
 
-  // Image preloading function
-  const preloadImage = useCallback(
-    (src: string): Promise<void> => {
-      if (preloadedImages.has(src)) {
-        return Promise.resolve()
-      }
-
-      return new Promise((resolve) => {
-        const img = new Image()
-        img.onload = () => {
-          setPreloadedImages((prev) => {
-            const newSet = new Set(prev)
-            newSet.add(src)
-            return newSet
-          })
-          resolve()
-        }
-        img.onerror = () => {
-          // Still resolve even on error to prevent blocking
-          resolve()
-        }
-        img.src = src
-      })
-    },
-    [preloadedImages],
-  )
-
-  // Preload all images for a project
-  const preloadProjectImages = useCallback(
-    (project: Project) => {
-      if (!project) return
-
-      const images = getProjectImages(project)
-
-      // Preload current image first
-      if (images[currentImageIndexRef.current]) {
-        setIsImageLoading(true)
-        preloadImage(images[currentImageIndexRef.current]).then(() => {
-          setIsImageLoading(false)
-        })
-      }
-
-      // Then preload all other images
-      images.forEach((src, index) => {
-        if (index !== currentImageIndexRef.current && src) {
-          preloadImage(src)
-        }
-      })
-    },
-    [preloadImage],
-  )
-
-  // Preload adjacent images (next and previous)
+  // Simplified preloading - only preload next/previous images
   const preloadAdjacentImages = useCallback(() => {
     const project = selectedProjectRef.current
     if (!project) return
@@ -212,11 +170,18 @@ export default function ProjectsPage() {
     if (images.length <= 1) return
 
     const nextIndex = (currentImageIndexRef.current + 1) % images.length
-    const prevIndex = (currentImageIndexRef.current - 1 + images.length) % images.length
-
-    if (images[nextIndex]) preloadImage(images[nextIndex])
-    if (images[prevIndex]) preloadImage(images[prevIndex])
-  }, [preloadImage])
+    const prevIndex =
+      (currentImageIndexRef.current - 1 + images.length) %
+      images.length[
+        // Only preload adjacent images
+        (images[nextIndex], images[prevIndex])
+      ].forEach((src) => {
+        if (src && !loadingImages.has(src)) {
+          const img = new Image()
+          img.src = src
+        }
+      })
+  }, [loadingImages])
 
   const filteredProjects = projects.filter(
     (project) =>
@@ -238,11 +203,6 @@ export default function ProjectsPage() {
   const openModal = (project: Project, imageIndex = 0) => {
     setSelectedProject(project)
     setCurrentImageIndex(imageIndex)
-
-    // Preload all images for this project
-    setTimeout(() => {
-      preloadProjectImages(project)
-    }, 0)
   }
 
   const nextImage = useCallback(() => {
@@ -250,10 +210,8 @@ export default function ProjectsPage() {
       const images = getProjectImages(selectedProject)
       setCurrentImageIndex((prev) => {
         const newIndex = prev < images.length - 1 ? prev + 1 : 0
-
         // Preload adjacent images after changing
-        setTimeout(() => preloadAdjacentImages(), 0)
-
+        setTimeout(() => preloadAdjacentImages(), 100)
         return newIndex
       })
     }
@@ -264,33 +222,20 @@ export default function ProjectsPage() {
       const images = getProjectImages(selectedProject)
       setCurrentImageIndex((prev) => {
         const newIndex = prev > 0 ? prev - 1 : images.length - 1
-
         // Preload adjacent images after changing
-        setTimeout(() => preloadAdjacentImages(), 0)
-
+        setTimeout(() => preloadAdjacentImages(), 100)
         return newIndex
       })
     }
   }, [selectedProject, preloadAdjacentImages])
 
-  // Preload images when modal is opened or image index changes
+  // Only preload adjacent images when modal is opened or image changes
   useEffect(() => {
     if (selectedProject) {
-      preloadAdjacentImages()
+      const timer = setTimeout(() => preloadAdjacentImages(), 200)
+      return () => clearTimeout(timer)
     }
   }, [selectedProject, currentImageIndex, preloadAdjacentImages])
-
-  // Preload first image of each visible project
-  useEffect(() => {
-    if (!isLoading) {
-      visibleProjects.forEach((project) => {
-        const images = getProjectImages(project)
-        if (images[0]) {
-          preloadImage(images[0])
-        }
-      })
-    }
-  }, [visibleProjects, isLoading, preloadImage])
 
   const handleSearch = (query: string) => {
     setSearchQuery(query)
@@ -299,6 +244,21 @@ export default function ProjectsPage() {
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     setVisibleCount(12) // Reset visible count when changing tabs
+    if (isMobile) {
+      setShowFilters(false) // Hide filters after selection on mobile
+    }
+  }
+
+  const handleImageLoadStart = (src: string) => {
+    setLoadingImages((prev) => new Set(prev).add(src))
+  }
+
+  const handleImageLoadComplete = (src: string) => {
+    setLoadingImages((prev) => {
+      const newSet = new Set(prev)
+      newSet.delete(src)
+      return newSet
+    })
   }
 
   // Handle keyboard navigation
@@ -318,6 +278,42 @@ export default function ProjectsPage() {
     window.addEventListener("keydown", handleKeyDown)
     return () => {
       window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [selectedProject, nextImage, prevImage])
+
+  // Handle touch swipe for image navigation
+  useEffect(() => {
+    if (!selectedProject) return
+
+    let touchStartX = 0
+    let touchEndX = 0
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartX = e.changedTouches[0].screenX
+    }
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      touchEndX = e.changedTouches[0].screenX
+      handleSwipe()
+    }
+
+    const handleSwipe = () => {
+      const swipeThreshold = 50
+      if (touchEndX < touchStartX - swipeThreshold) {
+        // Swipe left - go to next image
+        nextImage()
+      } else if (touchEndX > touchStartX + swipeThreshold) {
+        // Swipe right - go to previous image
+        prevImage()
+      }
+    }
+
+    document.addEventListener("touchstart", handleTouchStart, { passive: true })
+    document.addEventListener("touchend", handleTouchEnd, { passive: true })
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouchStart)
+      document.removeEventListener("touchend", handleTouchEnd)
     }
   }, [selectedProject, nextImage, prevImage])
 
@@ -352,10 +348,11 @@ export default function ProjectsPage() {
 
           <section className="py-12 md:py-20">
             <div className="container mx-auto px-4">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                {isMobile ? (
-                  <div className="w-full flex flex-col gap-4">
-                    <div className="relative w-full">
+              {/* Mobile Search and Filter UI */}
+              {isMobile && (
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                       <Input
                         type="text"
@@ -366,64 +363,83 @@ export default function ProjectsPage() {
                         aria-label="Search projects"
                       />
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="w-full md:w-auto flex justify-between items-center">
-                          <span className="truncate">
-                            {activeTab === "all"
-                              ? "All Projects"
-                              : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
-                          </span>
-                          <Filter className="h-4 w-4 ml-2 flex-shrink-0" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-[200px] max-h-[300px] overflow-y-auto">
-                        <DropdownMenuItem onSelect={() => handleTabChange("all")}>All Projects</DropdownMenuItem>
-                        {categories.map((category) => (
-                          <DropdownMenuItem key={category} onSelect={() => handleTabChange(category)}>
-                            {category.charAt(0).toUpperCase() + category.slice(1)}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                ) : (
-                  <>
-                    <Tabs
-                      defaultValue={activeTab}
-                      value={activeTab}
-                      onValueChange={handleTabChange}
-                      className="w-full max-w-3xl"
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 flex-shrink-0"
+                      onClick={() => setShowFilters(!showFilters)}
+                      aria-label="Toggle filters"
                     >
-                      <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 w-full gap-1 h-auto">
-                        <TabsTrigger value="all" className="px-2 py-1.5 h-auto text-sm whitespace-nowrap">
-                          All
-                        </TabsTrigger>
+                      <Filter className="h-5 w-5" />
+                    </Button>
+                  </div>
+
+                  {showFilters && (
+                    <div className="bg-white rounded-lg shadow-md p-4 mb-4 border border-gray-100 animate-in slide-in-from-top duration-300">
+                      <h3 className="font-medium text-sm mb-2 text-gray-700">Filter by Category</h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          variant={activeTab === "all" ? "default" : "outline"}
+                          size="sm"
+                          className={activeTab === "all" ? "bg-[#2A5D3C] hover:bg-[#3D8361]" : ""}
+                          onClick={() => handleTabChange("all")}
+                        >
+                          All Projects
+                        </Button>
                         {categories.map((category) => (
-                          <TabsTrigger
+                          <Button
                             key={category}
-                            value={category}
-                            className="px-2 py-1.5 h-auto text-sm whitespace-nowrap overflow-hidden text-ellipsis"
+                            variant={activeTab === category.toLowerCase() ? "default" : "outline"}
+                            size="sm"
+                            className={activeTab === category.toLowerCase() ? "bg-[#2A5D3C] hover:bg-[#3D8361]" : ""}
+                            onClick={() => handleTabChange(category.toLowerCase())}
                           >
-                            {category.charAt(0).toUpperCase() + category.slice(1)}
-                          </TabsTrigger>
+                            {category}
+                          </Button>
                         ))}
-                      </TabsList>
-                    </Tabs>
-                    <div className="relative w-full md:max-w-sm">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                      <Input
-                        type="text"
-                        placeholder="Search projects..."
-                        className="pl-10 pr-4 py-2 w-full border rounded-md"
-                        value={searchQuery}
-                        onChange={(e) => handleSearch(e.target.value)}
-                        aria-label="Search projects"
-                      />
+                      </div>
                     </div>
-                  </>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
+
+              {/* Desktop Filter UI */}
+              {!isMobile && (
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                  <Tabs
+                    defaultValue={activeTab}
+                    value={activeTab}
+                    onValueChange={handleTabChange}
+                    className="w-full max-w-3xl"
+                  >
+                    <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 w-full gap-1 h-auto">
+                      <TabsTrigger value="all" className="px-2 py-1.5 h-auto text-sm whitespace-nowrap">
+                        All
+                      </TabsTrigger>
+                      {categories.map((category) => (
+                        <TabsTrigger
+                          key={category}
+                          value={category.toLowerCase()}
+                          className="px-2 py-1.5 h-auto text-sm whitespace-nowrap overflow-hidden text-ellipsis"
+                        >
+                          {category}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </Tabs>
+                  <div className="relative w-full md:max-w-sm">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                    <Input
+                      type="text"
+                      placeholder="Search projects..."
+                      className="pl-10 pr-4 py-2 w-full border rounded-md"
+                      value={searchQuery}
+                      onChange={(e) => handleSearch(e.target.value)}
+                      aria-label="Search projects"
+                    />
+                  </div>
+                </div>
+              )}
 
               {error ? (
                 <div className="text-center py-20 bg-red-50 rounded-lg border border-red-100">
@@ -442,6 +458,7 @@ export default function ProjectsPage() {
                     onClick={() => {
                       setSearchQuery("")
                       setActiveTab("all")
+                      setShowFilters(false)
                     }}
                   >
                     Clear Filters
@@ -450,32 +467,35 @@ export default function ProjectsPage() {
               ) : (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-                    {visibleProjects.map((project) => {
+                    {visibleProjects.map((project, index) => {
                       const projectImages = getProjectImages(project)
+                      const imageSrc = projectImages[0]
+                      const isImageLoading = loadingImages.has(imageSrc)
 
                       return (
                         <div
                           key={project.id}
                           className="group relative overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer"
                           onClick={() => openModal(project, 0)}
-                          onMouseEnter={() => {
-                            // Preload first image on hover
-                            if (projectImages[0]) {
-                              preloadImage(projectImages[0])
-                            }
-                          }}
                         >
-                          <div className="relative h-52 sm:h-64 overflow-hidden">
-                            {projectImages[0] ? (
-                              <Image
-                                src={projectImages[0] || "/placeholder.svg"}
-                                alt={project.name || project.title || "Project"}
-                                fill
-                                className="object-cover transition-transform duration-500 group-hover:scale-110"
-                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                                priority={visibleProjects.indexOf(project) < 4} // Prioritize first 4 images
-                                unoptimized={projectImages[0]?.startsWith("http")}
-                              />
+                          <div className="relative h-64 sm:h-60 md:h-64 overflow-hidden">
+                            {imageSrc ? (
+                              <>
+                                {isImageLoading && <ImageSkeleton className="absolute inset-0 z-10" />}
+                                <Image
+                                  src={imageSrc || "/placeholder.svg"}
+                                  alt={project.name || project.title || "Project"}
+                                  fill
+                                  className="object-cover transition-transform duration-500 group-hover:scale-110"
+                                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                                  priority={index < 4} // Only prioritize first 4 images
+                                  loading={index < 4 ? "eager" : "lazy"}
+                                  quality={75} // Reduce quality for faster loading
+                                  onLoadingComplete={() => handleImageLoadComplete(imageSrc)}
+                                  onLoad={() => handleImageLoadComplete(imageSrc)}
+                                  onLoadStart={() => handleImageLoadStart(imageSrc)}
+                                />
+                              </>
                             ) : (
                               <div className="w-full h-full bg-gray-100 flex items-center justify-center">
                                 <span className="text-gray-400 text-sm">No image</span>
@@ -519,126 +539,138 @@ export default function ProjectsPage() {
             </div>
           </section>
 
-          {/* Image Modal */}
+          {/* Image Modal - Optimized Loading */}
           {selectedProject && (
             <div
-              className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-2 sm:p-4"
+              className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-0 sm:p-4"
               onClick={() => setSelectedProject(null)}
             >
               <div
-                className="relative max-w-5xl w-full bg-white rounded-lg overflow-hidden max-h-[90vh] flex flex-col"
+                className="relative w-full h-full sm:max-w-5xl sm:w-[95%] sm:max-h-[90vh] sm:h-auto bg-white sm:rounded-lg overflow-hidden flex flex-col"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
-                  className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-white/80 rounded-full p-1.5 sm:p-2 hover:bg-white transition-colors z-10"
+                  className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-white/80 rounded-full p-2 hover:bg-white transition-colors z-10"
                   onClick={() => setSelectedProject(null)}
                 >
                   <X className="h-5 w-5 sm:h-6 sm:w-6" />
                 </button>
 
-                <div className="relative h-[50vh] sm:h-[60vh] md:h-[70vh]">
-                  {isImageLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/10 z-10">
-                      <div className="w-10 h-10 border-4 border-[#3D8361] border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                  )}
+                <div className="relative h-[60vh] sm:h-[60vh] md:h-[70vh] bg-black">
+                  {(() => {
+                    const currentImageSrc = getProjectImages(selectedProject)[currentImageIndex]
+                    const isCurrentImageLoading = loadingImages.has(currentImageSrc)
 
-                  {getProjectImages(selectedProject)[currentImageIndex] ? (
-                    <Image
-                      src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
-                      alt={`${selectedProject.name || selectedProject.title} - Image ${currentImageIndex + 1}`}
-                      fill
-                      className="object-contain"
-                      priority
-                      sizes="(max-width: 1024px) 100vw, 80vw"
-                      unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
-                      onLoadingComplete={() => setIsImageLoading(false)}
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                      <span className="text-gray-400">No image available</span>
-                    </div>
-                  )}
+                    return (
+                      <>
+                        {isCurrentImageLoading && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/10 z-10">
+                            <div className="w-10 h-10 border-4 border-[#3D8361] border-t-transparent rounded-full animate-spin"></div>
+                          </div>
+                        )}
+
+                        {currentImageSrc ? (
+                          <Image
+                            src={currentImageSrc || "/placeholder.svg"}
+                            alt={`${selectedProject.name || selectedProject.title} - Image ${currentImageIndex + 1}`}
+                            fill
+                            className="object-contain"
+                            priority
+                            quality={85}
+                            sizes="100vw"
+                            onLoadingComplete={() => handleImageLoadComplete(currentImageSrc)}
+                            onLoad={() => handleImageLoadComplete(currentImageSrc)}
+                            onLoadStart={() => handleImageLoadStart(currentImageSrc)}
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                            <span className="text-gray-400">No image available</span>
+                          </div>
+                        )}
+                      </>
+                    )
+                  })()}
 
                   {getProjectImages(selectedProject).length > 1 && (
                     <>
                       <button
-                        className="absolute left-2 sm:left-4 top-1/2 transform -translate-y-1/2 bg-white/80 rounded-full p-2 sm:p-3 hover:bg-white transition-colors"
+                        className="absolute left-2 sm:left-4 top-1/2 transform -translate-y-1/2 bg-white/80 rounded-full p-3 hover:bg-white transition-colors"
                         onClick={(e) => {
                           e.stopPropagation()
                           prevImage()
                         }}
-                        onMouseEnter={() => {
-                          // Preload previous image on hover
-                          const images = getProjectImages(selectedProject)
-                          const prevIndex = (currentImageIndex - 1 + images.length) % images.length
-                          if (images[prevIndex]) preloadImage(images[prevIndex])
-                        }}
                       >
-                        <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
                       </button>
                       <button
-                        className="absolute right-2 sm:right-4 top-1/2 transform -translate-y-1/2 bg-white/80 rounded-full p-2 sm:p-3 hover:bg-white transition-colors"
+                        className="absolute right-2 sm:right-4 top-1/2 transform -translate-y-1/2 bg-white/80 rounded-full p-3 hover:bg-white transition-colors"
                         onClick={(e) => {
                           e.stopPropagation()
                           nextImage()
                         }}
-                        onMouseEnter={() => {
-                          // Preload next image on hover
-                          const images = getProjectImages(selectedProject)
-                          const nextIndex = (currentImageIndex + 1) % images.length
-                          if (images[nextIndex]) preloadImage(images[nextIndex])
-                        }}
                       >
-                        <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
                       </button>
                     </>
                   )}
+
+                  {/* Image counter for mobile */}
+                  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 text-white text-xs px-3 py-1 rounded-full sm:hidden">
+                    {currentImageIndex + 1} / {getProjectImages(selectedProject).length}
+                  </div>
                 </div>
 
-                {/* Thumbnails for multiple images */}
+                {/* Thumbnails for multiple images - optimized loading */}
                 {getProjectImages(selectedProject).length > 1 && (
-                  <div className="px-3 sm:px-6 pt-2 sm:pt-4 overflow-x-auto">
+                  <div className="px-2 sm:px-6 pt-2 sm:pt-4 overflow-x-auto bg-white">
                     <div className="flex gap-1 sm:gap-2 pb-2 snap-x snap-mandatory">
-                      {getProjectImages(selectedProject).map((img, idx) => (
-                        <div
-                          key={idx}
-                          className={`relative w-12 h-12 sm:w-16 sm:h-16 rounded overflow-hidden cursor-pointer border-2 flex-shrink-0 snap-start ${
-                            idx === currentImageIndex ? "border-[#2A5D3C]" : "border-transparent"
-                          }`}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setCurrentImageIndex(idx)
-                          }}
-                          onMouseEnter={() => {
-                            // Preload image on thumbnail hover
-                            if (img) preloadImage(img)
-                          }}
-                        >
-                          {img ? (
-                            <Image
-                              src={img || "/placeholder.svg"}
-                              alt={`Thumbnail ${idx + 1}`}
-                              fill
-                              className="object-cover"
-                              unoptimized={img?.startsWith("http")}
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                              <span className="text-gray-400 text-xs">Empty</span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                      {getProjectImages(selectedProject).map((img, idx) => {
+                        const isThumbLoading = loadingImages.has(img)
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`relative w-16 h-16 sm:w-16 sm:h-16 rounded overflow-hidden cursor-pointer border-2 flex-shrink-0 snap-start ${
+                              idx === currentImageIndex ? "border-[#2A5D3C]" : "border-transparent"
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setCurrentImageIndex(idx)
+                            }}
+                          >
+                            {img ? (
+                              <>
+                                {isThumbLoading && <ImageSkeleton className="absolute inset-0 z-10" />}
+                                <Image
+                                  src={img || "/placeholder.svg"}
+                                  alt={`Thumbnail ${idx + 1}`}
+                                  fill
+                                  className="object-cover"
+                                  quality={60} // Lower quality for thumbnails
+                                  sizes="64px"
+                                  loading="lazy"
+                                  onLoadingComplete={() => handleImageLoadComplete(img)}
+                                  onLoad={() => handleImageLoadComplete(img)}
+                                  onLoadStart={() => handleImageLoadStart(img)}
+                                />
+                              </>
+                            ) : (
+                              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                <span className="text-gray-400 text-xs">Empty</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
 
                 {/* Project details */}
-                <ScrollArea className="p-4 sm:p-6 max-h-[30vh]">
+                <ScrollArea className="p-4 sm:p-6 flex-grow overflow-auto">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                      <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">
                         {selectedProject.name || selectedProject.title}
                       </h2>
                       <Badge className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white border-none capitalize">
