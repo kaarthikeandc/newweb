@@ -30,13 +30,6 @@ interface Project {
   created_at?: string
 }
 
-const getProjectImages = (project: Project) => {
-  const images = []
-  if (project.image) images.push(project.image)
-  if (project.images) images.push(...project.images)
-  return images
-}
-
 function ProjectsFilter({
   categories,
   activeTab,
@@ -140,6 +133,13 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
   const [imageLoadingStates, setImageLoadingStates] = useState<Record<string, boolean>>({})
+
+  const getProjectImages = (project: Project) => {
+    const images = []
+    if (project.image) images.push(project.image)
+    if (project.images) images.push(...project.images)
+    return images
+  }
 
   // Image preloading function
   const preloadImage = useCallback(
@@ -456,17 +456,6 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
   )
 }
 
-const preloadImages = useCallback((projects: Project[]) => {
-  // Preload first image of each project
-  projects.slice(0, 6).forEach((project) => {
-    const images = getProjectImages(project)
-    if (images[0]) {
-      const img = new Image()
-      img.src = images[0]
-    }
-  })
-}, [])
-
 export default function ProjectsPage() {
   const router = useRouter()
   const pathname = usePathname()
@@ -561,9 +550,19 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     if (projects.length > 0) {
-      preloadImages(projects)
+      // Preload first image of each project
+      projects.slice(0, 6).forEach((project) => {
+        const images = []
+        if (project.image) images.push(project.image)
+        if (project.images) images.push(...project.images)
+
+        if (images[0]) {
+          const img = new Image()
+          img.src = images[0]
+        }
+      })
     }
-  }, [projects, preloadImages])
+  }, [projects])
 
   const filteredByCategory =
     activeTab === "all" ? projects : projects.filter((project) => project.category === activeTab)
