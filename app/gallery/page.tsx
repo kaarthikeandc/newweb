@@ -1,59 +1,86 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import Navbar from "@/components/navbar"
-import Footer from "@/components/footer"
+import { useState, useEffect, useCallback } from "react"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import Image from "next/image"
+import { X, ChevronLeft, ChevronRight, Search, Filter, ZoomIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, ZoomIn, X, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import Image from "next/image"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import Navbar from "@/components/navbar"
+import Footer from "@/components/footer"
 import { supabase } from "@/lib/supabaseClient"
 import LoadingAnimation from "@/components/loading-animation"
 
-// Project type definition
-type Project = {
+interface Project {
   id: string
-  name: string
-  category: string
+  name?: string
+  title?: string
   description?: string
   location?: string
   client?: string
-  area?: string
-  year?: string
+  category: string
+  image?: string
   images?: string[]
   created_at?: string
 }
 
-export default function GalleryPage() {
+export default function ProjectsPage() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [projects, setProjects] = useState<Project[]>([])
+  const [categories, setCategories] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState("all")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedProject, setSelectedProject] = useState<null | Project>(null)
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0)
-  const [visibleCount, setVisibleCount] = useState(12)
   const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState(searchParams?.get("q") || "")
+  const [activeTab, setActiveTab] = useState(searchParams?.get("category") || "all")
+  const [isMobile, setIsMobile] = useState(false)
   const [heroImage, setHeroImage] = useState<string>("")
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [visibleCount, setVisibleCount] = useState(12)
 
-  // Fetch projects from Supabase
   useEffect(() => {
-    const fetchProjects = async () => {
+    const fetchHeroImage = async () => {
       try {
-        setIsLoading(true)
-
-        // Fetch hero image
-        const { data: heroData, error: heroError } = await supabase
+        const { data, error } = await supabase
           .from("site_settings")
           .select("value")
-          .eq("key", "gallery_hero_image")
+          .eq("key", "projects_hero_image")
           .single()
 
-        if (heroData && !heroError) {
-          setHeroImage(heroData.value)
+        if (data && !error) {
+          setHeroImage(data.value)
         }
+      } catch (error) {
+        console.error("Error fetching hero image:", error)
+      }
+    }
 
-        // Existing project fetch code
+    fetchHeroImage()
+  }, [])
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+
+    checkMobile()
+    window.addEventListener("resize", checkMobile)
+
+    return () => {
+      window.removeEventListener("resize", checkMobile)
+    }
+  }, [])
+
+  useEffect(() => {
+    async function fetchProjects() {
+      try {
+        setIsLoading(true)
         const { data, error } = await supabase.from("projects").select("*").order("created_at", { ascending: false })
 
         if (error) {
@@ -61,26 +88,31 @@ export default function GalleryPage() {
         }
 
         if (data) {
-          // Process data to ensure images is always an array
           const processedData = data.map((project) => {
-            if (project.image && !project.images) {
-              return {
-                ...project,
-                images: [project.image],
-              }
-            } else if (!project.images) {
-              return {
-                ...project,
-                images: [],
-              }
+            // Normalize image data
+            let images: string[] = []
+
+            if (project.images && project.images.length > 0) {
+              images = project.images
+            } else if (project.image) {
+              images = Array.isArray(project.image) ? project.image : [project.image]
             }
-            return project
+
+            return {
+              ...project,
+              image: images[0] || "", // Keep first image in image field for backward compatibility
+              images, // Store all images in images array
+            }
           })
 
           setProjects(processedData)
+
+          // Extract unique categories
+          const uniqueCategories = Array.from(new Set(processedData.map((project) => project.category)))
+          setCategories(uniqueCategories)
         }
       } catch (error: any) {
-        console.error("Error fetching data:", error.message)
+        console.error("Error fetching projects:", error.message)
         setError("Failed to load projects. Please try again later.")
       } finally {
         setIsLoading(false)
@@ -90,19 +122,22 @@ export default function GalleryPage() {
     fetchProjects()
   }, [])
 
-  // Filter projects based on active tab and search query
-  const filteredProjects = projects.filter((project) => {
-    // Skip projects with no images
-    if (!project.images || project.images.length === 0) return false
+  const getProjectImages = (project: Project) => {
+    const images = []
+    if (project.image) images.push(project.image)
+    if (project.images) images.push(...project.images)
+    return images
+  }
 
-    const matchesCategory = activeTab === "all" || project.category.toLowerCase() === activeTab
-    const matchesSearch =
-      project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (project.description && project.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (project.location && project.location.toLowerCase().includes(searchQuery.toLowerCase()))
-
-    return matchesCategory && matchesSearch
-  })
+  const filteredProjects = projects.filter(
+    (project) =>
+      (activeTab === "all" || project.category.toLowerCase() === activeTab.toLowerCase()) &&
+      (project.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.client?.toLowerCase().includes(searchQuery.toLowerCase())),
+  )
 
   const visibleProjects = filteredProjects.slice(0, visibleCount)
   const hasMore = visibleProjects.length < filteredProjects.length
@@ -111,289 +146,352 @@ export default function GalleryPage() {
     setVisibleCount((prev) => prev + 8)
   }
 
-  // Handle image navigation in modal
-  const nextImage = () => {
-    if (selectedProject && selectedProject.images) {
-      setSelectedImageIndex((prev) => (prev < selectedProject.images!.length - 1 ? prev + 1 : 0))
-    }
-  }
-
-  const prevImage = () => {
-    if (selectedProject && selectedProject.images) {
-      setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : selectedProject.images!.length - 1))
-    }
-  }
-
-  // Open modal with specific project and image index
   const openModal = (project: Project, imageIndex = 0) => {
     setSelectedProject(project)
-    setSelectedImageIndex(imageIndex)
+    setCurrentImageIndex(imageIndex)
+  }
+
+  const nextImage = useCallback(() => {
+    if (selectedProject) {
+      const images = getProjectImages(selectedProject)
+      setCurrentImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0))
+    }
+  }, [selectedProject])
+
+  const prevImage = useCallback(() => {
+    if (selectedProject) {
+      const images = getProjectImages(selectedProject)
+      setCurrentImageIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1))
+    }
+  }, [selectedProject])
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query)
+  }
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab)
+    setVisibleCount(12) // Reset visible count when changing tabs
   }
 
   return (
     <div className="min-h-screen flex flex-col">
       {isLoading ? (
         <div className="flex justify-center items-center h-screen">
-          <LoadingAnimation /> {/* ✅ Using LoadingAnimation component */}
+          <LoadingAnimation />
         </div>
       ) : (
         <>
           <Navbar />
 
-     
-
-      {/* Hero Section */}
-      <section className="pt-16 lg:pt-24 relative">
-        <div className="absolute inset-0 bg-black/60 z-10"></div>
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{
-            backgroundImage: heroImage ? `url('${heroImage}')` : "none",
-            backgroundColor: heroImage ? "transparent" : "#2A5D3C",
-          }}
-        ></div>
-        <div className="container mx-auto px-4 py-12 md:py-20 relative z-20 text-white">
-          <div className="max-w-3xl">
-            <h1 className="text-3xl md:text-5xl font-bold mb-4 md:mb-6">Project Gallery</h1>
-         
-          </div>
-        </div>
-      </section>
-
-      {/* Gallery Section */}
-      <section className="py-16 md:py-24">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-            <Tabs defaultValue="all" className="w-full" onValueChange={setActiveTab}>
-              <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 w-full gap-1 h-auto">
-                <TabsTrigger value="all" className="px-2 py-1.5 h-auto text-sm">
-                  All
-                </TabsTrigger>
-                <TabsTrigger value="infrastructure" className="px-2 py-1.5 h-auto text-sm">
-                  Infrastructure
-                </TabsTrigger>
-                <TabsTrigger value="industrial" className="px-2 py-1.5 h-auto text-sm">
-                  Industrial
-                </TabsTrigger>
-                <TabsTrigger value="commercial" className="px-2 py-1.5 h-auto text-sm">
-                  Commercial
-                </TabsTrigger>
-                <TabsTrigger value="residential" className="px-2 py-1.5 h-auto text-sm">
-                  Residential
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-
-            <div className="relative w-full md:max-w-sm">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-              <Input
-                type="text"
-                placeholder="Search projects..."
-                className="pl-10 pr-4 py-2 w-full border rounded-md"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+          <section className="pt-16 lg:pt-24 relative">
+            <div className="absolute inset-0 bg-black/60 z-10"></div>
+            <div
+              className="absolute inset-0 bg-cover bg-center"
+              style={{
+                backgroundImage: heroImage ? `url('${heroImage}')` : "none",
+                backgroundColor: heroImage ? "transparent" : "#2A5D3C",
+              }}
+            ></div>
+            <div className="container mx-auto px-4 py-8 md:py-20 relative z-20 text-white">
+              <div className="max-w-3xl">
+                <h1 className="text-2xl md:text-5xl font-bold mb-2 md:mb-6">Our Projects</h1>
+                <p className="text-sm md:text-xl mb-4 md:mb-8 text-gray-100 max-w-2xl">
+                  Explore our diverse portfolio of infrastructure, industrial, commercial, and residential projects.
+                </p>
+              </div>
             </div>
-          </div>
+          </section>
 
-          {isLoading ? (
-            <div className="flex justify-center items-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
-              <span>Loading projects...</span>
-            </div>
-          ) : error ? (
-            <div className="text-center py-20">
-              <h3 className="text-xl font-bold mb-2 text-red-600">{error}</h3>
-              <Button variant="outline" onClick={() => window.location.reload()} className="mt-4">
-                Try Again
-              </Button>
-            </div>
-          ) : filteredProjects.length === 0 ? (
-            <div className="text-center py-20">
-              <h3 className="text-xl font-bold mb-2">No projects found</h3>
-              <p className="text-gray-600 mb-4">Try adjusting your search or filter criteria</p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSearchQuery("")
-                  setActiveTab("all")
-                }}
-              >
-                Clear Filters
-              </Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-              {visibleProjects.map((project) => (
-                <div
-                  key={project.id}
-                  className="group relative overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer"
-                  onClick={() => openModal(project, 0)}
-                >
-                  <div className="relative h-52 sm:h-64 overflow-hidden">
-                    {project.images && project.images[0] ? (
-                      <Image
-                        src={project.images[0] || "/placeholder.svg"}
-                        alt={project.name}
-                        fill
-                        className="object-cover transition-transform duration-500 group-hover:scale-110"
+          <section className="py-12 md:py-20">
+            <div className="container mx-auto px-4">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                {isMobile ? (
+                  <div className="w-full flex flex-col gap-4">
+                    <div className="relative w-full">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                      <Input
+                        type="text"
+                        placeholder="Search projects..."
+                        className="pl-10 pr-4 py-2 w-full border rounded-md"
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        aria-label="Search projects"
                       />
-                    ) : (
-                      <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                        <span className="text-gray-400 text-sm">No image</span>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <div className="bg-white/90 rounded-full p-2 sm:p-3">
-                        <ZoomIn className="h-5 w-5 sm:h-6 sm:w-6 text-[#2A5D3C]" />
-                      </div>
                     </div>
-                    {project.images && project.images.length > 1 && (
-                      <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
-                        +{project.images.length - 1}
-                      </div>
-                    )}
-                    <div className="absolute bottom-0 left-0 p-3 bg-gradient-to-t from-black/70 to-transparent w-full">
-                      <span className="text-white font-medium text-sm sm:text-base">{project.name}</span>
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full md:w-auto flex justify-between items-center">
+                          <span className="truncate">
+                            {activeTab === "all"
+                              ? "All Projects"
+                              : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+                          </span>
+                          <Filter className="h-4 w-4 ml-2 flex-shrink-0" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[200px] max-h-[300px] overflow-y-auto">
+                        <DropdownMenuItem onSelect={() => handleTabChange("all")}>All Projects</DropdownMenuItem>
+                        {categories.map((category) => (
+                          <DropdownMenuItem key={category} onSelect={() => handleTabChange(category)}>
+                            {category.charAt(0).toUpperCase() + category.slice(1)}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
+                ) : (
+                  <>
+                    <Tabs
+                      defaultValue={activeTab}
+                      value={activeTab}
+                      onValueChange={handleTabChange}
+                      className="w-full max-w-3xl"
+                    >
+                      <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 w-full gap-1 h-auto">
+                        <TabsTrigger value="all" className="px-2 py-1.5 h-auto text-sm whitespace-nowrap">
+                          All
+                        </TabsTrigger>
+                        {categories.map((category) => (
+                          <TabsTrigger
+                            key={category}
+                            value={category}
+                            className="px-2 py-1.5 h-auto text-sm whitespace-nowrap overflow-hidden text-ellipsis"
+                          >
+                            {category.charAt(0).toUpperCase() + category.slice(1)}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </Tabs>
+                    <div className="relative w-full md:max-w-sm">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                      <Input
+                        type="text"
+                        placeholder="Search projects..."
+                        className="pl-10 pr-4 py-2 w-full border rounded-md"
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        aria-label="Search projects"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {error ? (
+                <div className="text-center py-20 bg-red-50 rounded-lg border border-red-100">
+                  <h3 className="text-xl font-bold mb-2 text-red-600">{error}</h3>
+                  <p className="text-red-500 mb-4">There was a problem connecting to the database.</p>
+                  <Button variant="outline" onClick={() => window.location.reload()} className="mt-4">
+                    Try Again
+                  </Button>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {hasMore && (
-            <div className="flex justify-center mt-12">
-              <Button className="bg-[#2A5D3C] hover:bg-[#3D8361]" onClick={loadMore}>
-                Load More
-              </Button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Image Modal */}
-      {selectedProject && selectedProject.images && selectedProject.images.length > 0 && (
-        <div
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-2 sm:p-4"
-          onClick={() => setSelectedProject(null)}
-        >
-          <div
-            className="relative max-w-5xl w-full bg-white rounded-lg overflow-hidden max-h-[90vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-white/80 rounded-full p-1.5 sm:p-2 hover:bg-white transition-colors z-10"
-              onClick={() => setSelectedProject(null)}
-            >
-              <X className="h-5 w-5 sm:h-6 sm:w-6" />
-            </button>
-
-            <div className="relative h-[50vh] sm:h-[60vh] md:h-[70vh]">
-              {selectedProject.images[selectedImageIndex] ? (
-                <Image
-                  src={selectedProject.images[selectedImageIndex] || "/placeholder.svg"}
-                  alt={`${selectedProject.name} - Image ${selectedImageIndex + 1}`}
-                  fill
-                  className="object-contain"
-                />
+              ) : filteredProjects.length === 0 ? (
+                <div className="text-center py-20">
+                  <h3 className="text-xl font-bold mb-2">No projects found</h3>
+                  <p className="text-gray-600 mb-4">Try adjusting your search or filter criteria</p>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearchQuery("")
+                      setActiveTab("all")
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
+                </div>
               ) : (
-                <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                  <span className="text-gray-400">No image available</span>
-                </div>
-              )}
-
-              {selectedProject.images.length > 1 && (
                 <>
-                  <button
-                    className="absolute left-2 sm:left-4 top-1/2 transform -translate-y-1/2 bg-white/80 rounded-full p-2 sm:p-3 hover:bg-white transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      prevImage()
-                    }}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-4 w-4 sm:h-5 sm:w-5"
-                    >
-                      <path d="m15 18-6-6 6-6" />
-                    </svg>
-                  </button>
-                  <button
-                    className="absolute right-2 sm:right-4 top-1/2 transform -translate-y-1/2 bg-white/80 rounded-full p-2 sm:p-3 hover:bg-white transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      nextImage()
-                    }}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-4 w-4 sm:h-5 sm:w-5"
-                    >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
-                  </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                    {visibleProjects.map((project) => {
+                      const projectImages = getProjectImages(project)
+
+                      return (
+                        <div
+                          key={project.id}
+                          className="group relative overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer"
+                          onClick={() => openModal(project, 0)}
+                        >
+                          <div className="relative h-52 sm:h-64 overflow-hidden">
+                            {projectImages[0] ? (
+                              <Image
+                                src={projectImages[0] || "/placeholder.svg"}
+                                alt={project.name || project.title || "Project"}
+                                fill
+                                className="object-cover transition-transform duration-500 group-hover:scale-110"
+                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                                unoptimized={projectImages[0]?.startsWith("http")}
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                <span className="text-gray-400 text-sm">No image</span>
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <div className="bg-white/90 rounded-full p-2 sm:p-3">
+                                <ZoomIn className="h-5 w-5 sm:h-6 sm:w-6 text-[#2A5D3C]" />
+                              </div>
+                            </div>
+                            {projectImages.length > 1 && (
+                              <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
+                                +{projectImages.length - 1}
+                              </div>
+                            )}
+                            <div className="absolute bottom-0 left-0 p-3 bg-gradient-to-t from-black/70 to-transparent w-full">
+                              <div className="flex items-center justify-between">
+                                <span className="text-white font-medium text-sm sm:text-base line-clamp-1">
+                                  {project.name || project.title}
+                                </span>
+                                <Badge className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white border-none capitalize text-xs">
+                                  {project.category}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {hasMore && (
+                    <div className="flex justify-center mt-12">
+                      <Button className="bg-[#2A5D3C] hover:bg-[#3D8361]" onClick={loadMore}>
+                        Load More
+                      </Button>
+                    </div>
+                  )}
                 </>
               )}
             </div>
+          </section>
 
-            {/* Thumbnails for multiple images - make scrollable on mobile */}
-            {selectedProject.images.length > 1 && (
-              <div className="px-3 sm:px-6 pt-2 sm:pt-4 overflow-x-auto">
-                <div className="flex gap-1 sm:gap-2 pb-2 snap-x snap-mandatory">
-                  {selectedProject.images.map((img, idx) => (
-                    <div
-                      key={idx}
-                      className={`relative w-12 h-12 sm:w-16 sm:h-16 rounded overflow-hidden cursor-pointer border-2 flex-shrink-0 snap-start ${
-                        idx === selectedImageIndex ? "border-[#2A5D3C]" : "border-transparent"
-                      }`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSelectedImageIndex(idx)
-                      }}
-                    >
-                      {img ? (
-                        <Image
-                          src={img || "/placeholder.svg"}
-                          alt={`Thumbnail ${idx + 1}`}
-                          fill
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                          <span className="text-gray-400 text-xs">Empty</span>
+          {/* Image Modal */}
+          {selectedProject && (
+            <div
+              className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-2 sm:p-4"
+              onClick={() => setSelectedProject(null)}
+            >
+              <div
+                className="relative max-w-5xl w-full bg-white rounded-lg overflow-hidden max-h-[90vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-white/80 rounded-full p-1.5 sm:p-2 hover:bg-white transition-colors z-10"
+                  onClick={() => setSelectedProject(null)}
+                >
+                  <X className="h-5 w-5 sm:h-6 sm:w-6" />
+                </button>
+
+                <div className="relative h-[50vh] sm:h-[60vh] md:h-[70vh]">
+                  {getProjectImages(selectedProject)[currentImageIndex] ? (
+                    <Image
+                      src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
+                      alt={`${selectedProject.name || selectedProject.title} - Image ${currentImageIndex + 1}`}
+                      fill
+                      className="object-contain"
+                      priority
+                      sizes="(max-width: 1024px) 100vw, 80vw"
+                      unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                      <span className="text-gray-400">No image available</span>
+                    </div>
+                  )}
+
+                  {getProjectImages(selectedProject).length > 1 && (
+                    <>
+                      <button
+                        className="absolute left-2 sm:left-4 top-1/2 transform -translate-y-1/2 bg-white/80 rounded-full p-2 sm:p-3 hover:bg-white transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          prevImage()
+                        }}
+                      >
+                        <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </button>
+                      <button
+                        className="absolute right-2 sm:right-4 top-1/2 transform -translate-y-1/2 bg-white/80 rounded-full p-2 sm:p-3 hover:bg-white transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          nextImage()
+                        }}
+                      >
+                        <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* Thumbnails for multiple images */}
+                {getProjectImages(selectedProject).length > 1 && (
+                  <div className="px-3 sm:px-6 pt-2 sm:pt-4 overflow-x-auto">
+                    <div className="flex gap-1 sm:gap-2 pb-2 snap-x snap-mandatory">
+                      {getProjectImages(selectedProject).map((img, idx) => (
+                        <div
+                          key={idx}
+                          className={`relative w-12 h-12 sm:w-16 sm:h-16 rounded overflow-hidden cursor-pointer border-2 flex-shrink-0 snap-start ${
+                            idx === currentImageIndex ? "border-[#2A5D3C]" : "border-transparent"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setCurrentImageIndex(idx)
+                          }}
+                        >
+                          {img ? (
+                            <Image
+                              src={img || "/placeholder.svg"}
+                              alt={`Thumbnail ${idx + 1}`}
+                              fill
+                              className="object-cover"
+                              unoptimized={img?.startsWith("http")}
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                              <span className="text-gray-400 text-xs">Empty</span>
+                            </div>
+                          )}
                         </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Project details */}
+                <ScrollArea className="p-4 sm:p-6 max-h-[30vh]">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                        {selectedProject.name || selectedProject.title}
+                      </h2>
+                      <Badge className="bg-[#3D8361] hover:bg-[#2A5D3C] text-white border-none capitalize">
+                        {selectedProject.category}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                      {selectedProject.location && (
+                        <p>
+                          <span className="font-medium">Location:</span> {selectedProject.location}
+                        </p>
+                      )}
+                      {selectedProject.client && (
+                        <p>
+                          <span className="font-medium">Client:</span> {selectedProject.client}
+                        </p>
                       )}
                     </div>
-                  ))}
-                </div>
+                    <p className="text-gray-700 dark:text-gray-300 text-sm sm:text-base">
+                      {selectedProject.description}
+                    </p>
+                  </div>
+                </ScrollArea>
               </div>
-            )}
-          </div>
-        </div>
-      )}
-      
-      <Footer />
-      </>
+            </div>
+          )}
+
+          <Footer />
+        </>
       )}
     </div>
-    
   )
 }
-
