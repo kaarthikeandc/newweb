@@ -17,6 +17,7 @@ import Navbar from "@/components/navbar"
 import Footer from "@/components/footer"
 import { supabase } from "@/lib/supabaseClient"
 import LoadingAnimation from "@/components/loading-animation"
+
 interface Project {
   id: string
   name?: string
@@ -131,65 +132,6 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
-  const [imageLoadingStates, setImageLoadingStates] = useState<Record<string, boolean>>({})
-
-  const getProjectImages = (project: Project) => {
-    const images = []
-    if (project.image) images.push(project.image)
-    if (project.images) images.push(...project.images)
-    return images
-  }
-
-  // Image preloading function
-  const preloadImage = useCallback(
-    (src: string) => {
-      if (preloadedImages.has(src)) return Promise.resolve()
-
-      return new Promise<void>((resolve, reject) => {
-        const img = new Image()
-        img.crossOrigin = "anonymous"
-        img.onload = () => {
-          setPreloadedImages((prev) => new Set([...prev, src]))
-          setImageLoadingStates((prev) => ({ ...prev, [src]: false }))
-          resolve()
-        }
-        img.onerror = reject
-        img.src = src
-        setImageLoadingStates((prev) => ({ ...prev, [src]: true }))
-      })
-    },
-    [preloadedImages],
-  )
-
-  // Preload project images on hover
-  const handleProjectHover = useCallback(
-    (project: Project) => {
-      const images = getProjectImages(project)
-      images.slice(0, 3).forEach((img) => preloadImage(img)) // Preload first 3 images
-    },
-    [preloadImage],
-  )
-
-  // Preload adjacent images in modal
-  const preloadAdjacentImages = useCallback(() => {
-    if (!selectedProject) return
-
-    const images = getProjectImages(selectedProject)
-    const nextIndex = (currentImageIndex + 1) % images.length
-    const prevIndex = (currentImageIndex - 1 + images.length) % images.length
-
-    // Preload next and previous images
-    if (images[nextIndex]) preloadImage(images[nextIndex])
-    if (images[prevIndex]) preloadImage(images[prevIndex])
-  }, [selectedProject, currentImageIndex, preloadImage])
-
-  // Effect to preload adjacent images when current image changes
-  useEffect(() => {
-    if (isModalOpen && selectedProject) {
-      preloadAdjacentImages()
-    }
-  }, [isModalOpen, selectedProject, currentImageIndex, preloadAdjacentImages])
 
   const filteredProjects = projects.filter(
     (project) =>
@@ -199,15 +141,18 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
       project.client?.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
+  const getProjectImages = (project: Project) => {
+    const images = []
+    if (project.image) images.push(project.image)
+    if (project.images) images.push(...project.images)
+    return images
+  }
+
   const openProjectModal = (project: Project, e: React.MouseEvent) => {
     e.preventDefault()
     setSelectedProject(project)
     setCurrentImageIndex(0)
     setIsModalOpen(true)
-
-    // Preload all images for this project immediately
-    const images = getProjectImages(project)
-    images.forEach((img) => preloadImage(img))
   }
 
   const closeModal = () => {
@@ -245,11 +190,9 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
 
     const handleSwipe = () => {
       if (touchEndX < touchStartX - 50) {
-        // Swipe left
         nextImage()
       }
       if (touchEndX > touchStartX + 50) {
-        // Swipe right
         previousImage()
       }
     }
@@ -276,7 +219,6 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
               key={project.id}
               className="group overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-gray-200 hover:-translate-y-1 cursor-pointer"
               onClick={(e) => openProjectModal(project, e)}
-              onMouseEnter={() => handleProjectHover(project)}
             >
               <div className="relative h-48 sm:h-52 md:h-64 overflow-hidden">
                 {projectImages[0] ? (
@@ -285,7 +227,7 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                     alt={project.name || project.title || "Project"}
                     fill
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    priority={index < 6} // Only prioritize first 6 images
+                    priority={index < 6}
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     unoptimized={projectImages[0]?.startsWith("http")}
                   />
@@ -346,24 +288,14 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                   </div>
                   {getProjectImages(selectedProject)[currentImageIndex] && (
                     <div className="relative w-full h-full">
-                      {imageLoadingStates[getProjectImages(selectedProject)[currentImageIndex]] && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                          <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        </div>
-                      )}
                       <Image
                         src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
                         alt={selectedProject.name || selectedProject.title || "Project"}
                         fill
-                        className="object-contain transition-opacity duration-200"
+                        className="object-contain"
                         priority
                         sizes="(max-width: 1024px) 100vw, 80vw"
-                        loading="eager"
                         unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
-                        onLoad={() => {
-                          const src = getProjectImages(selectedProject)[currentImageIndex]
-                          setImageLoadingStates((prev) => ({ ...prev, [src]: false }))
-                        }}
                       />
                     </div>
                   )}
@@ -373,11 +305,6 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                         onClick={(e) => {
                           e.stopPropagation()
                           previousImage()
-                        }}
-                        onMouseEnter={() => {
-                          const images = getProjectImages(selectedProject)
-                          const prevIndex = (currentImageIndex - 1 + images.length) % images.length
-                          if (images[prevIndex]) preloadImage(images[prevIndex])
                         }}
                         className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors backdrop-blur-sm"
                         aria-label="Previous image"
@@ -389,11 +316,6 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                           e.stopPropagation()
                           nextImage()
                         }}
-                        onMouseEnter={() => {
-                          const images = getProjectImages(selectedProject)
-                          const nextIndex = (currentImageIndex + 1) % images.length
-                          if (images[nextIndex]) preloadImage(images[nextIndex])
-                        }}
                         className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/70 text-white transition-colors backdrop-blur-sm"
                         aria-label="Next image"
                       >
@@ -403,14 +325,13 @@ function ProjectsList({ projects, searchQuery }: { projects: Project[]; searchQu
                   )}
                   {getProjectImages(selectedProject).length > 1 && (
                     <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-10">
-                      {getProjectImages(selectedProject).map((image, index) => (
+                      {getProjectImages(selectedProject).map((_, index) => (
                         <button
                           key={index}
                           onClick={(e) => {
                             e.stopPropagation()
                             setCurrentImageIndex(index)
                           }}
-                          onMouseEnter={() => preloadImage(image)}
                           className={`w-3 h-3 rounded-full transition-all ${
                             index === currentImageIndex ? "bg-white scale-110" : "bg-white/50 hover:bg-white/80"
                           }`}
@@ -515,7 +436,6 @@ export default function ProjectsPage() {
 
         if (data) {
           const processedData = data.map((project) => {
-            // Normalize image data
             let images: string[] = []
 
             if (project.images && project.images.length > 0) {
@@ -526,14 +446,12 @@ export default function ProjectsPage() {
 
             return {
               ...project,
-              image: images[0] || "", // Keep first image in image field for backward compatibility
-              images, // Store all images in images array
+              image: images[0] || "",
+              images,
             }
           })
 
           setProjects(processedData)
-
-          // Extract unique categories
           const uniqueCategories = Array.from(new Set(processedData.map((project) => project.category)))
           setCategories(uniqueCategories)
         }
@@ -548,22 +466,6 @@ export default function ProjectsPage() {
     fetchProjects()
   }, [])
 
-  useEffect(() => {
-    if (projects.length > 0) {
-      // Preload first image of each project
-      projects.slice(0, 6).forEach((project) => {
-        const images = []
-        if (project.image) images.push(project.image)
-        if (project.images) images.push(...project.images)
-
-        if (images[0]) {
-          const img = new Image()
-          img.src = images[0]
-        }
-      })
-    }
-  }, [projects])
-
   const filteredByCategory =
     activeTab === "all" ? projects : projects.filter((project) => project.category === activeTab)
 
@@ -575,7 +477,7 @@ export default function ProjectsPage() {
     <div className="min-h-screen flex flex-col">
       {isLoading ? (
         <div className="flex justify-center items-center h-screen">
-          <LoadingAnimation /> {/* ✅ Using LoadingAnimation component */}
+          <LoadingAnimation />
         </div>
       ) : (
         <>
