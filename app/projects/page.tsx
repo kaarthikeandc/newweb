@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { X, ChevronLeft, ChevronRight, Search, Filter, ZoomIn } from "lucide-react"
@@ -43,6 +43,18 @@ export default function ProjectsPage() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [visibleCount, setVisibleCount] = useState(12)
+  const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
+  const [isImageLoading, setIsImageLoading] = useState(false)
+
+  // Refs for tracking current project and image index
+  const selectedProjectRef = useRef<Project | null>(null)
+  const currentImageIndexRef = useRef<number>(0)
+
+  // Update refs when state changes
+  useEffect(() => {
+    selectedProjectRef.current = selectedProject
+    currentImageIndexRef.current = currentImageIndex
+  }, [selectedProject, currentImageIndex])
 
   useEffect(() => {
     const fetchHeroImage = async () => {
@@ -129,6 +141,73 @@ export default function ProjectsPage() {
     return images
   }
 
+  // Image preloading function
+  const preloadImage = useCallback(
+    (src: string): Promise<void> => {
+      if (preloadedImages.has(src)) {
+        return Promise.resolve()
+      }
+
+      return new Promise((resolve) => {
+        const img = new Image()
+        img.onload = () => {
+          setPreloadedImages((prev) => {
+            const newSet = new Set(prev)
+            newSet.add(src)
+            return newSet
+          })
+          resolve()
+        }
+        img.onerror = () => {
+          // Still resolve even on error to prevent blocking
+          resolve()
+        }
+        img.src = src
+      })
+    },
+    [preloadedImages],
+  )
+
+  // Preload all images for a project
+  const preloadProjectImages = useCallback(
+    (project: Project) => {
+      if (!project) return
+
+      const images = getProjectImages(project)
+
+      // Preload current image first
+      if (images[currentImageIndexRef.current]) {
+        setIsImageLoading(true)
+        preloadImage(images[currentImageIndexRef.current]).then(() => {
+          setIsImageLoading(false)
+        })
+      }
+
+      // Then preload all other images
+      images.forEach((src, index) => {
+        if (index !== currentImageIndexRef.current && src) {
+          preloadImage(src)
+        }
+      })
+    },
+    [preloadImage],
+  )
+
+  // Preload adjacent images (next and previous)
+  const preloadAdjacentImages = useCallback(() => {
+    const project = selectedProjectRef.current
+    if (!project) return
+
+    const images = getProjectImages(project)
+    if (images.length <= 1) return
+
+    const nextIndex = (currentImageIndexRef.current + 1) % images.length
+    const prevIndex = (currentImageIndexRef.current - 1 + images.length) % images.length
+
+    if (images[nextIndex]) preloadImage(images[nextIndex])
+    if (images[prevIndex]) preloadImage(images[prevIndex])
+  }, [preloadImage])
+
   const filteredProjects = projects.filter(
     (project) =>
       (activeTab === "all" || project.category.toLowerCase() === activeTab.toLowerCase()) &&
@@ -149,21 +228,59 @@ export default function ProjectsPage() {
   const openModal = (project: Project, imageIndex = 0) => {
     setSelectedProject(project)
     setCurrentImageIndex(imageIndex)
+
+    // Preload all images for this project
+    setTimeout(() => {
+      preloadProjectImages(project)
+    }, 0)
   }
 
   const nextImage = useCallback(() => {
     if (selectedProject) {
       const images = getProjectImages(selectedProject)
-      setCurrentImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0))
+      setCurrentImageIndex((prev) => {
+        const newIndex = prev < images.length - 1 ? prev + 1 : 0
+
+        // Preload adjacent images after changing
+        setTimeout(() => preloadAdjacentImages(), 0)
+
+        return newIndex
+      })
     }
-  }, [selectedProject])
+  }, [selectedProject, preloadAdjacentImages])
 
   const prevImage = useCallback(() => {
     if (selectedProject) {
       const images = getProjectImages(selectedProject)
-      setCurrentImageIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1))
+      setCurrentImageIndex((prev) => {
+        const newIndex = prev > 0 ? prev - 1 : images.length - 1
+
+        // Preload adjacent images after changing
+        setTimeout(() => preloadAdjacentImages(), 0)
+
+        return newIndex
+      })
     }
-  }, [selectedProject])
+  }, [selectedProject, preloadAdjacentImages])
+
+  // Preload images when modal is opened or image index changes
+  useEffect(() => {
+    if (selectedProject) {
+      preloadAdjacentImages()
+    }
+  }, [selectedProject, currentImageIndex, preloadAdjacentImages])
+
+  // Preload first image of each visible project
+  useEffect(() => {
+    if (!isLoading) {
+      visibleProjects.forEach((project) => {
+        const images = getProjectImages(project)
+        if (images[0]) {
+          preloadImage(images[0])
+        }
+      })
+    }
+  }, [visibleProjects, isLoading, preloadImage])
 
   const handleSearch = (query: string) => {
     setSearchQuery(query)
@@ -173,6 +290,26 @@ export default function ProjectsPage() {
     setActiveTab(tab)
     setVisibleCount(12) // Reset visible count when changing tabs
   }
+
+  // Handle keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedProject) return
+
+      if (e.key === "ArrowRight") {
+        nextImage()
+      } else if (e.key === "ArrowLeft") {
+        prevImage()
+      } else if (e.key === "Escape") {
+        setSelectedProject(null)
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [selectedProject, nextImage, prevImage])
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -311,6 +448,12 @@ export default function ProjectsPage() {
                           key={project.id}
                           className="group relative overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer"
                           onClick={() => openModal(project, 0)}
+                          onMouseEnter={() => {
+                            // Preload first image on hover
+                            if (projectImages[0]) {
+                              preloadImage(projectImages[0])
+                            }
+                          }}
                         >
                           <div className="relative h-52 sm:h-64 overflow-hidden">
                             {projectImages[0] ? (
@@ -320,6 +463,7 @@ export default function ProjectsPage() {
                                 fill
                                 className="object-cover transition-transform duration-500 group-hover:scale-110"
                                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                                priority={visibleProjects.indexOf(project) < 4} // Prioritize first 4 images
                                 unoptimized={projectImages[0]?.startsWith("http")}
                               />
                             ) : (
@@ -383,6 +527,12 @@ export default function ProjectsPage() {
                 </button>
 
                 <div className="relative h-[50vh] sm:h-[60vh] md:h-[70vh]">
+                  {isImageLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/10 z-10">
+                      <div className="w-10 h-10 border-4 border-[#3D8361] border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  )}
+
                   {getProjectImages(selectedProject)[currentImageIndex] ? (
                     <Image
                       src={getProjectImages(selectedProject)[currentImageIndex] || "/placeholder.svg"}
@@ -392,6 +542,7 @@ export default function ProjectsPage() {
                       priority
                       sizes="(max-width: 1024px) 100vw, 80vw"
                       unoptimized={getProjectImages(selectedProject)[currentImageIndex]?.startsWith("http")}
+                      onLoadingComplete={() => setIsImageLoading(false)}
                     />
                   ) : (
                     <div className="w-full h-full bg-gray-100 flex items-center justify-center">
@@ -407,6 +558,12 @@ export default function ProjectsPage() {
                           e.stopPropagation()
                           prevImage()
                         }}
+                        onMouseEnter={() => {
+                          // Preload previous image on hover
+                          const images = getProjectImages(selectedProject)
+                          const prevIndex = (currentImageIndex - 1 + images.length) % images.length
+                          if (images[prevIndex]) preloadImage(images[prevIndex])
+                        }}
                       >
                         <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
                       </button>
@@ -415,6 +572,12 @@ export default function ProjectsPage() {
                         onClick={(e) => {
                           e.stopPropagation()
                           nextImage()
+                        }}
+                        onMouseEnter={() => {
+                          // Preload next image on hover
+                          const images = getProjectImages(selectedProject)
+                          const nextIndex = (currentImageIndex + 1) % images.length
+                          if (images[nextIndex]) preloadImage(images[nextIndex])
                         }}
                       >
                         <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -436,6 +599,10 @@ export default function ProjectsPage() {
                           onClick={(e) => {
                             e.stopPropagation()
                             setCurrentImageIndex(idx)
+                          }}
+                          onMouseEnter={() => {
+                            // Preload image on thumbnail hover
+                            if (img) preloadImage(img)
                           }}
                         >
                           {img ? (
