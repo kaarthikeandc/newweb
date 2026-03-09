@@ -22,7 +22,7 @@ export default function RootLayout({
       <head>
         <meta
           httpEquiv="Content-Security-Policy"
-          content="style-src 'self' 'unsafe-inline'; img-src 'self' data:https://efmslhxqzcyzzdvakiic.supabase.co;"
+          content="style-src 'self' 'unsafe-inline'; img-src 'self' data: https://efmslhxqzcyzzdvakiic.supabase.co https://cbxnjtqptvzvuejmhkdd.supabase.co;"
         />
       </head>
       <body className={inter.className}>
